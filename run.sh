@@ -21,7 +21,7 @@ COMMANDS:
     train-autoencoder   Train autoencoder only, save encoder weights
     train-svm           Train SVM using pre-trained encoder weights
     evaluate            Evaluate using pre-trained encoder + SVM weights
-    pipeline            Full: train-autoencoder -> train-svm -> evaluate (default)
+    pipeline            Full: train-autoencoder -> train-svm (default)
 
 OPTIONS:
     --device cpu|gpu        Device to use (default: gpu)
@@ -242,9 +242,5 @@ case "$MODE" in
             exit 1
         }
         echo "[Step 2 completed successfully]"
-        
-        echo ""
-        echo "=== Step 3: Evaluating ==="
-        $INFER_EXE $INFER_ARGS --evaluate-only
         ;;
 esac

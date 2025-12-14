@@ -9,8 +9,8 @@
 
 namespace gpu_svm {
 
-// Memory limit for ThunderSVM working set (1GB)
-static constexpr size_t MAX_SVM_MEMORY_MB = 1024;
+// Memory limit for ThunderSVM working set (8GB)
+static constexpr size_t MAX_SVM_MEMORY_MB = 8192;
 
 ThunderSVMTrainer::ThunderSVMTrainer(double C, double gamma)
     : model_(nullptr), C_(C), gamma_(gamma) {

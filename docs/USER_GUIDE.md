@@ -20,6 +20,7 @@ The primary focus is GPU acceleration using CUDA, achieving up to **226x speedup
 - **Operating System**: Linux, Windows, or macOS
 - **GPU**: NVIDIA GPU with Compute Capability 6.0+ (Pascal or newer)
 - **VRAM**: Minimum 2 GB, recommended 4 GB or more
+- **RAM**: Minimum 8 GB, **~17 GB peak for full pipeline** (SVM training phase)
 
 ### Software Requirements
 
@@ -57,13 +58,23 @@ cd AutoEncoder-CUDA
 
 This downloads and extracts the CIFAR-10 binary files to `./data/`.
 
-### 3. Setup ThunderSVM
+### 3. Download Pretrained Weights (Optional)
+
+Skip training and use pretrained weights for quick evaluation:
+
+```bash
+./scripts/download_weights.sh
+```
+
+This downloads encoder weights and SVM model from Google Drive to `./checkpoints/`.
+
+### 4. Setup ThunderSVM
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### 4. Build the Project
+### 5. Build the Project
 
 ```bash
 ./build.sh --clean
@@ -77,10 +88,11 @@ This creates three executables in `./build/bin/`:
 | `autoencoder_gpu`       | GPU training (all optimization levels) |
 | `autoencoder_inference` | Feature extraction + SVM pipeline    |
 
-### 5. Run the Pipeline
+### 6. Run the Pipeline
 
 ```bash
 # Full pipeline (default): train autoencoder -> train SVM -> evaluate
+# Requires ~17GB peak RAM - use Google Colab Pro/Pro+ with High RAM mode
 ./run.sh
 
 # Train autoencoder only

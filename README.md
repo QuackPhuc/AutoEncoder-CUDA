@@ -50,6 +50,7 @@ git submodule update --init --recursive
 ./build.sh
 
 # 5. Run Full Pipeline (Train Autoencoder + Train SVM + Evaluate)
+# Pipeline requires ~17GB peak RAM - use Google Colab Pro/Pro+ with High RAM mode
 ./run.sh
 
 # Or train autoencoder only (outputs timestamped weights)
