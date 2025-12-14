@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
         std::string svm_model_path = "./checkpoints/svm.bin";
         std::string report_path = "./results/classification_report.txt";
         std::string confusion_csv = "./results/confusion_matrix.csv";
+        std::string predictions_path = "./results/predictions.txt";
         int batch_size = 128;
         int gpu_version = 3;  // Default: GPU_OPT_V2 (fastest)
         bool train_svm = true;  // Default: train SVM
@@ -172,6 +173,19 @@ int main(int argc, char** argv) {
         evaluation::ResultsVisualizer::save_confusion_matrix_csv(
             metrics.confusion_matrix,
             confusion_csv);
+        
+        // Save predictions (Predicted vs Ground Truth)
+        {
+            std::ofstream pred_file(predictions_path);
+            if (pred_file.is_open()) {
+                for (int pred : predictions) {
+                    pred_file << pred << "\n";
+                }
+                pred_file.close();
+            } else {
+                std::cerr << "Warning: Could not save predictions to " << predictions_path << "\n";
+            }
+        }
         
         // Summary
         std::cout << "\n=== Results ===\n";

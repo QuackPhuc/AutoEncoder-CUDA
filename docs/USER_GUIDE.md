@@ -215,6 +215,7 @@ Performance metrics and evaluation results are saved to `./results/`:
 | `benchmark.png`             | Performance comparison chart |
 | `classification_report.txt` | Per-class accuracy report    |
 | `confusion_matrix.csv`      | 10x10 confusion matrix       |
+| `predictions.txt`           | Per-sample SVM predictions   |
 
 ---
 
