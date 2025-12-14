@@ -33,7 +33,7 @@ done
 
 mkdir -p ./results
 RESULTS="./results/benchmark.csv"
-echo "Version,Time_ms,Loss" > "$RESULTS"
+echo "Version,Time_ms,Loss,Memory_GB" > "$RESULTS"
 
 echo "[benchmark] epochs=$EPOCHS samples=$SAMPLES"
 echo ""
@@ -47,9 +47,12 @@ run_bench() {
     END=$(date +%s%3N)
     TIME=$((END - START))
     LOSS=$(grep -oP 'Loss: \K[0-9.]+' /tmp/bench_out.txt 2>/dev/null | tail -1 || echo "N/A")
-    echo "${TIME}ms"
-    echo "$name,$TIME,$LOSS" >> "$RESULTS"
+    # Parse GPU Memory Used from GPUProfiler output (e.g., "GPU Memory Used:   0.8 GB")
+    MEM=$(grep -oP 'GPU Memory Used:\s+\K[0-9.]+' /tmp/bench_out.txt 2>/dev/null | tail -1 || echo "N/A")
+    echo "${TIME}ms (${MEM} GB)"
+    echo "$name,$TIME,$LOSS,$MEM" >> "$RESULTS"
     eval "${name//-/_}_MS=$TIME"
+    eval "${name//-/_}_MEM=$MEM"
 }
 
 # Find executables
@@ -68,19 +71,19 @@ echo ""
 
 # Summary table
 echo "Results:"
-printf "  %-12s %10s %12s\n" "Version" "Time(ms)" "Speedup"
-echo "  ------------------------------------"
+printf "  %-12s %10s %12s %10s\n" "Version" "Time(ms)" "Speedup" "Memory(GB)"
+echo "  ------------------------------------------------"
 
 if [[ "$GPU_ONLY" == false && -n "${CPU_MS:-}" ]]; then
-    printf "  %-12s %10d %12s\n" "CPU" $CPU_MS "1.00x"
+    printf "  %-12s %10d %12s %10s\n" "CPU" $CPU_MS "1.00x" "N/A"
     BASE=$CPU_MS
 else
     BASE=${GPU_Basic_MS:-1}
 fi
 
-[[ -n "${GPU_Basic_MS:-}" ]] && printf "  %-12s %10d %12.1fx\n" "GPU-Basic" $GPU_Basic_MS $(echo "scale=1; $BASE/$GPU_Basic_MS" | bc)
-[[ -n "${GPU_OptV1_MS:-}" ]] && printf "  %-12s %10d %12.1fx\n" "GPU-OptV1" $GPU_OptV1_MS $(echo "scale=1; $BASE/$GPU_OptV1_MS" | bc)
-[[ -n "${GPU_OptV2_MS:-}" ]] && printf "  %-12s %10d %12.1fx\n" "GPU-OptV2" $GPU_OptV2_MS $(echo "scale=1; $BASE/$GPU_OptV2_MS" | bc)
+[[ -n "${GPU_Basic_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-Basic" $GPU_Basic_MS $(echo "scale=1; $BASE/$GPU_Basic_MS" | bc) "${GPU_Basic_MEM:-N/A}"
+[[ -n "${GPU_OptV1_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-OptV1" $GPU_OptV1_MS $(echo "scale=1; $BASE/$GPU_OptV1_MS" | bc) "${GPU_OptV1_MEM:-N/A}"
+[[ -n "${GPU_OptV2_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-OptV2" $GPU_OptV2_MS $(echo "scale=1; $BASE/$GPU_OptV2_MS" | bc) "${GPU_OptV2_MEM:-N/A}"
 
 echo ""
 echo "[OK] Saved: $RESULTS"

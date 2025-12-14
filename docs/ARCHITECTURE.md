@@ -309,25 +309,43 @@ dLoss/dPrediction = (2/N) * (prediction - target)
 
 ### Per-Image Memory
 
-| Buffer                | Size (bytes)        |
-|-----------------------|---------------------|
-| Input                 | 3,072 * 4 = 12 KB   |
-| Output                | 3,072 * 4 = 12 KB   |
-| Encoder activations   | ~2.1 MB             |
-| Decoder activations   | ~2.4 MB             |
-| Gradients             | ~4.5 MB             |
+All values use float32 (4 bytes per element).
+
+| Buffer                | Calculation                       | Size        |
+|-----------------------|-----------------------------------|-------------|
+| Input                 | 32×32×3 × 4                       | 12 KB       |
+| Output                | 32×32×3 × 4                       | 12 KB       |
+| Encoder activations   | (262144+65536+32768+8192) × 4     | 1.41 MB     |
+| Decoder activations   | (8192+32768+65536+262144+3072) × 4| 1.42 MB     |
+| Gradients             | (encoder + decoder) × 4           | 2.82 MB     |
+
+**Encoder activations breakdown:**
+
+- Conv1: 32×32×256 = 262,144
+- Pool1: 16×16×256 = 65,536
+- Conv2: 16×16×128 = 32,768
+- Pool2: 8×8×128 = 8,192
+- **Total:** 368,640 elements
 
 ### Total GPU Memory (batch 64)
 
-| Component             | Size          |
-|-----------------------|---------------|
-| Weights               | ~3 MB         |
-| Weight gradients      | ~3 MB         |
-| Activations           | ~150 MB       |
-| Gradient buffers      | ~290 MB       |
-| Intermediate buffers  | ~100 MB       |
-| im2col workspace (V4) | ~75 MB        |
-| **Total**             | **~625 MB**   |
+| Component             | Calculation                       | Size        |
+|-----------------------|-----------------------------------|-------------|
+| Weights               | 751,875 × 4                       | 2.87 MB     |
+| Weight gradients      | 751,875 × 4                       | 2.87 MB     |
+| Activations           | 2.82 MB × 64                      | 180.75 MB   |
+| Gradient buffers      | 2.82 MB × 64                      | 180.75 MB   |
+| MaxPool indices       | (65536+8192) × 64 × 4             | 18.00 MB    |
+| im2col workspace (V2) | See note below                    | 144-576 MB  |
+| **Total**             |                                   | **530-960 MB** |
+
+> [!NOTE]
+> **im2col workspace size** varies by layer and implementation:
+>
+> - Conv2 (256→128): 144 MB/batch (often reused)
+> - Conv5 (256→3): 576 MB/batch (if batched)
+>
+> Actual implementations typically process one sample at a time for im2col, reducing workspace to ~9 MB.
 
 ---
 

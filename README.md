@@ -27,6 +27,14 @@ The project demonstrates progressive CUDA optimization achieving significant GPU
 - *CPU baseline measured on 100 samples only. Estimated full training (50,000 samples): ~23.5 hours/epoch.*
 - *GPU values: average per epoch from 50,000 samples, 3 epochs. (GPU: T4)*
 
+### Classification Accuracy
+
+| Metric               | Achieved  |
+|----------------------|-----------|
+| Overall Accuracy     | 65%       |
+| Feature Extraction   | ~7.6 sec  |
+| SVM Training         | ~296.7 sec|
+
 ## Quick Start
 
 ### Prerequisites

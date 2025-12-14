@@ -235,9 +235,9 @@ Performance metrics and evaluation results are saved to `./results/`:
 
 | Metric               | Achieved  |
 |----------------------|-----------|
-| Overall Accuracy     | 60.08%    |
-| Feature Extraction   | ~160 sec  |
-| SVM Training         | ~292 sec  |
+| Overall Accuracy     | 65%       |
+| Feature Extraction   | ~7.6 sec  |
+| SVM Training         | ~296.7 sec|
 
 ---
 

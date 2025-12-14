@@ -253,3 +253,6 @@ perf.data*
 # Build configuration
 !CMakeLists.txt
 !build.ps1
+
+# project artifact
+project_description.md
