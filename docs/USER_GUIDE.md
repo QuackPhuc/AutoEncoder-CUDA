@@ -9,7 +9,7 @@ This project implements a two-stage machine learning pipeline:
 1. **Unsupervised Feature Learning**: Train a convolutional autoencoder to compress 32x32x3 CIFAR-10 images into 8,192-dimensional feature representations.
 2. **Supervised Classification**: Train an SVM classifier on the extracted features to classify images into 10 categories.
 
-The primary focus is GPU acceleration using CUDA, achieving up to **226x speedup** over CPU baseline.
+The primary focus is GPU acceleration using CUDA, achieving up to **1690x speedup** over CPU baseline.
 
 ---
 
@@ -225,9 +225,9 @@ Performance metrics and evaluation results are saved to `./results/`:
 | Version      | Training Time | Speedup |
 |--------------|---------------|---------|
 | CPU Baseline | ~400 hrs*     | 1.0x    |
-| GPU Basic    | ~166 min      | 166.7x  |
-| GPU Opt v1   | ~111 min      | 237.0x  |
-| GPU Opt v2   | ~99 min       | 266.0x  |
+| GPU Basic    | ~166 min      | 169x  |
+| GPU Opt v1   | ~82 min      | 342x  |
+| GPU Opt v2   | ~17 min       | 1690x  |
 
 *CPU time estimated from 100-sample benchmark.*
 

@@ -365,8 +365,6 @@ All values use float32 (4 bytes per element).
 
 ### Memory Layout
 
-**V1/V2**: NHWC (batch, height, width, channels) - optimized for channel-wise coalescing.
-
-**V3/V4**: NCHW (batch, channels, height, width) - optimized for spatial operations and cuDNN compatibility.
+**V1/V2**: NCHW (batch, channels, height, width) - optimized for spatial operations and cuDNN compatibility.
 
 The receptive field at the output covers most of the 32x32 input, allowing the network to capture global context.
