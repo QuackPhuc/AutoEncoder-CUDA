@@ -172,3 +172,135 @@ void launchConvGemmBackwardWeights(
         beta = 1.0f;  // Accumulate for remaining batches
     }
 }
+
+// ============================================================
+// Stream-aware versions for GPU Opt V3
+// ============================================================
+
+// Helper: Add bias on specified stream
+static void launchAddBiasStream(float* d_output, const float* d_bias, 
+                                int batch, int outC, int outHW, 
+                                bool applyRelu, cudaStream_t stream) {
+    int total = batch * outC * outHW;
+    int blockSize = 256;
+    int gridSize = (total + blockSize - 1) / blockSize;
+    
+    if (applyRelu) {
+        addBiasReluNCHWKernel<<<gridSize, blockSize, 0, stream>>>(
+            d_output, d_bias, batch, outC, outHW
+        );
+    } else {
+        addBiasNCHWKernel<<<gridSize, blockSize, 0, stream>>>(
+            d_output, d_bias, batch, outC, outHW
+        );
+    }
+    CHECK_CUDA(cudaGetLastError());
+}
+
+// Stream-aware GEMM forward
+void launchConvGemmForwardStream(
+    const float* d_weights,
+    const float* d_im2col,
+    const float* d_bias,
+    float* d_output,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream,
+    bool applyRelu
+) {
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    
+    int M = outC;
+    int N = outHW;
+    int K = inC_k_k;
+    
+    long long int strideA = 0;
+    long long int strideB = (long long int)K * N;
+    long long int strideC = (long long int)M * N;
+    
+    CHECK_CUBLAS(cublasSgemmStridedBatched(handle,
+        CUBLAS_OP_N, CUBLAS_OP_N,
+        N, M, K,
+        &alpha,
+        d_im2col, N, strideB,
+        d_weights, K, strideA,
+        &beta,
+        d_output, N, strideC,
+        batch
+    ));
+    
+    // Add bias on the same stream
+    launchAddBiasStream(d_output, d_bias, batch, outC, outHW, applyRelu, stream);
+}
+
+// Stream-aware GEMM backward w.r.t. input
+void launchConvGemmBackwardInputStream(
+    const float* d_weights,
+    const float* d_gradOutput,
+    float* d_col,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream
+) {
+    (void)stream; // Stream is already set on handle
+    
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    
+    int M = inC_k_k;
+    int N = outHW;
+    int K = outC;
+    
+    long long int strideA = 0;
+    long long int strideB = (long long int)K * N;
+    long long int strideC = (long long int)M * N;
+    
+    CHECK_CUBLAS(cublasSgemmStridedBatched(handle,
+        CUBLAS_OP_N, CUBLAS_OP_T,
+        N, M, K,
+        &alpha,
+        d_gradOutput, N, strideB,
+        d_weights, M, strideA,
+        &beta,
+        d_col, N, strideC,
+        batch
+    ));
+}
+
+// Stream-aware GEMM backward w.r.t. weights
+void launchConvGemmBackwardWeightsStream(
+    const float* d_gradOutput,
+    const float* d_im2col,
+    float* d_gradWeights,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream
+) {
+    (void)stream; // Stream is already set on handle
+    
+    const float alpha = 1.0f;
+    float beta = 0.0f;
+    
+    int M = outC;
+    int N = inC_k_k;
+    int K = outHW;
+    
+    for (int n = 0; n < batch; ++n) {
+        const float* gradOut_n = d_gradOutput + n * M * K;
+        const float* im2col_n = d_im2col + n * N * K;
+        
+        CHECK_CUBLAS(cublasSgemm(handle,
+            CUBLAS_OP_T, CUBLAS_OP_N,
+            N, M, K,
+            &alpha,
+            im2col_n, K,
+            gradOut_n, K,
+            &beta,
+            d_gradWeights, N
+        ));
+        
+        beta = 1.0f;
+    }
+}
+

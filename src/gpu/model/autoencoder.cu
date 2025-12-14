@@ -2,6 +2,7 @@
 #include "gpu/core/cuda_utils.h"
 #include "config/gpu_config.h"
 #include <cuda_runtime.h>
+#include <cublas_v2.h>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -9,14 +10,44 @@
 #include <iostream>
 
 GPUAutoencoder::GPUAutoencoder(int batchSize, float learningRate)
-    : m_batchSize(batchSize), m_learningRate(learningRate), m_lastLoss(0.0f) {
+    : m_batchSize(batchSize), m_learningRate(learningRate), m_lastLoss(0.0f),
+      m_stream_compute(nullptr), m_stream_transfer(nullptr), 
+      m_cublas_handle(nullptr), m_streams_initialized(false) {
     
     printGPUInfo();
     allocateMemory();
     initializeWeights();
+    
+    // Initialize CUDA streams for V3 mode
+    if (GPUConfig::getInstance().getVersion() == GPUVersion::GPU_OPT_V3) {
+        CHECK_CUDA(cudaStreamCreate(&m_stream_compute));
+        CHECK_CUDA(cudaStreamCreate(&m_stream_transfer));
+        
+        cublasStatus_t status = cublasCreate(&m_cublas_handle);
+        if (status != CUBLAS_STATUS_SUCCESS) {
+            std::cerr << "cuBLAS handle creation failed for V3" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        // Associate cuBLAS handle with compute stream
+        cublasSetStream(m_cublas_handle, m_stream_compute);
+        m_streams_initialized = true;
+        std::cout << "CUDA Streams initialized for V3 mode" << std::endl;
+    }
 }
 
 GPUAutoencoder::~GPUAutoencoder() {
+    // Clean up streams and cuBLAS handle first
+    if (m_streams_initialized) {
+        if (m_cublas_handle) {
+            cublasDestroy(m_cublas_handle);
+        }
+        if (m_stream_compute) {
+            cudaStreamDestroy(m_stream_compute);
+        }
+        if (m_stream_transfer) {
+            cudaStreamDestroy(m_stream_transfer);
+        }
+    }
     freeMemory();
 }
 
@@ -246,10 +277,13 @@ void GPUAutoencoder::forward() {
             forwardBasic();
             break;
         case GPUVersion::GPU_OPT_V1:
-            forwardOptV1(); // Was V3
+            forwardOptV1();
             break;
         case GPUVersion::GPU_OPT_V2:
-            forwardOptV2(); // Was V4
+            forwardOptV2();
+            break;
+        case GPUVersion::GPU_OPT_V3:
+            forwardOptV3();
             break;
         default:
             forwardBasic();
@@ -265,10 +299,13 @@ void GPUAutoencoder::backward() {
             backwardBasic();
             break;
         case GPUVersion::GPU_OPT_V1:
-            backwardOptV1(); // Was V3
+            backwardOptV1();
             break;
         case GPUVersion::GPU_OPT_V2:
-            backwardOptV2(); // Was V4
+            backwardOptV2();
+            break;
+        case GPUVersion::GPU_OPT_V3:
+            backwardOptV3();
             break;
         default:
             backwardBasic();

@@ -78,4 +78,40 @@ void launchConvGemmBackwardWeights(
     int batch, int outC, int inC_k_k, int outHW
 );
 
+// ============================================================
+// Stream-aware versions for GPU Opt V3
+// ============================================================
+
+// Stream-aware GEMM forward with custom cuBLAS handle
+void launchConvGemmForwardStream(
+    const float* d_weights,
+    const float* d_im2col,
+    const float* d_bias,
+    float* d_output,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream,
+    bool applyRelu = false
+);
+
+// Stream-aware GEMM backward w.r.t. input
+void launchConvGemmBackwardInputStream(
+    const float* d_weights,
+    const float* d_gradOutput,
+    float* d_col,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream
+);
+
+// Stream-aware GEMM backward w.r.t. weights 
+void launchConvGemmBackwardWeightsStream(
+    const float* d_gradOutput,
+    const float* d_im2col,
+    float* d_gradWeights,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream
+);
+
 #endif // GPU_GEMM_CONV_GEMM_H

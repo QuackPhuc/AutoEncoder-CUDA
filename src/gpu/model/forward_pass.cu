@@ -221,3 +221,131 @@ void GPUAutoencoder::forwardOptV2() {
                           d_output,
                           m_batchSize, 3, 2304, 1024, false);  // applyRelu=false
 }
+
+// ============================================================
+// GPU Opt V3: im2col + cuBLAS GEMM + CUDA Streams Forward Pass
+// ============================================================
+
+// External stream-aware kernel declarations
+extern void launchIm2colNCHWStream(
+    const float* d_input, float* d_col,
+    int batch, int inC, int inH, int inW,
+    int outH, int outW,
+    int kernelSize, int stride, int padding,
+    cudaStream_t stream);
+
+extern void launchConvGemmForwardStream(
+    const float* d_weights, const float* d_im2col, const float* d_bias,
+    float* d_output,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle, cudaStream_t stream,
+    bool applyRelu);
+
+extern void launchMaxPool2dNCHWStream(
+    const float* d_input, float* d_output, int* d_indices,
+    int batch, int channels, int inH, int inW,
+    int k, int stride, cudaStream_t stream);
+
+extern void launchUpsample2dNCHWStream(
+    const float* d_input, float* d_output,
+    int batch, int channels, int inH, int inW,
+    int scale, cudaStream_t stream);
+
+void GPUAutoencoder::forwardOptV3() {
+    // V3 uses two streams:
+    // - m_stream_compute: for GEMM (cuBLAS)
+    // - m_stream_transfer: for im2col, pooling, upsample
+    // The cuBLAS handle is already set to m_stream_compute
+    
+    cudaStream_t s_comp = m_stream_compute;
+    cudaStream_t s_aux = m_stream_transfer;
+    
+    // ========================
+    // Layer 1: Conv+ReLU+Pool
+    // ========================
+    // im2col on aux stream
+    launchIm2colNCHWStream(d_input, d_im2col_workspace,
+                           m_batchSize, 3, 32, 32, 32, 32, 3, 1, 1, s_aux);
+    // Wait for im2col to complete before GEMM reads it
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    
+    // GEMM+bias+ReLU on compute stream
+    launchConvGemmForwardStream(d_enc_conv1_w, d_im2col_workspace, d_enc_conv1_b,
+                                d_enc_relu1_out,
+                                m_batchSize, 256, 27, 1024,
+                                m_cublas_handle, s_comp, true);
+    // Wait for GEMM before pooling
+    CHECK_CUDA(cudaStreamSynchronize(s_comp));
+    
+    // MaxPool on aux stream
+    launchMaxPool2dNCHWStream(d_enc_relu1_out, d_enc_pool1_out, d_enc_pool1_indices,
+                              m_batchSize, 256, 32, 32, 2, 2, s_aux);
+    
+    // ========================
+    // Layer 2: Conv+ReLU+Pool
+    // ========================
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    launchIm2colNCHWStream(d_enc_pool1_out, d_im2col_workspace,
+                           m_batchSize, 256, 16, 16, 16, 16, 3, 1, 1, s_aux);
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    
+    launchConvGemmForwardStream(d_enc_conv2_w, d_im2col_workspace, d_enc_conv2_b,
+                                d_enc_relu2_out,
+                                m_batchSize, 128, 2304, 256,
+                                m_cublas_handle, s_comp, true);
+    CHECK_CUDA(cudaStreamSynchronize(s_comp));
+    
+    launchMaxPool2dNCHWStream(d_enc_relu2_out, d_enc_pool2_out, d_enc_pool2_indices,
+                              m_batchSize, 128, 16, 16, 2, 2, s_aux);
+    
+    // ========================
+    // Layer 3: Conv+ReLU+Upsample
+    // ========================
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    launchIm2colNCHWStream(d_enc_pool2_out, d_im2col_workspace,
+                           m_batchSize, 128, 8, 8, 8, 8, 3, 1, 1, s_aux);
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    
+    launchConvGemmForwardStream(d_dec_conv3_w, d_im2col_workspace, d_dec_conv3_b,
+                                d_dec_relu3_out,
+                                m_batchSize, 128, 1152, 64,
+                                m_cublas_handle, s_comp, true);
+    CHECK_CUDA(cudaStreamSynchronize(s_comp));
+    
+    launchUpsample2dNCHWStream(d_dec_relu3_out, d_dec_up1_out,
+                               m_batchSize, 128, 8, 8, 2, s_aux);
+    
+    // ========================
+    // Layer 4: Conv+ReLU+Upsample
+    // ========================
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    launchIm2colNCHWStream(d_dec_up1_out, d_im2col_workspace,
+                           m_batchSize, 128, 16, 16, 16, 16, 3, 1, 1, s_aux);
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    
+    launchConvGemmForwardStream(d_dec_conv4_w, d_im2col_workspace, d_dec_conv4_b,
+                                d_dec_relu4_out,
+                                m_batchSize, 256, 1152, 256,
+                                m_cublas_handle, s_comp, true);
+    CHECK_CUDA(cudaStreamSynchronize(s_comp));
+    
+    launchUpsample2dNCHWStream(d_dec_relu4_out, d_dec_up2_out,
+                               m_batchSize, 256, 16, 16, 2, s_aux);
+    
+    // ========================
+    // Layer 5: Conv only (no ReLU)
+    // ========================
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    launchIm2colNCHWStream(d_dec_up2_out, d_im2col_workspace,
+                           m_batchSize, 256, 32, 32, 32, 32, 3, 1, 1, s_aux);
+    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    
+    launchConvGemmForwardStream(d_dec_conv5_w, d_im2col_workspace, d_dec_conv5_b,
+                                d_output,
+                                m_batchSize, 3, 2304, 1024,
+                                m_cublas_handle, s_comp, false);
+    
+    // Ensure all operations complete before returning
+    CHECK_CUDA(cudaStreamSynchronize(s_comp));
+}
+

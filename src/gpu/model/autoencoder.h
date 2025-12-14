@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <string>
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 // Forward-declare GPU config enum
 enum class GPUVersion;
@@ -41,11 +43,13 @@ private:
     void forwardBasic();
     void forwardOptV1();  // NCHW layout optimized (formerly V3)
     void forwardOptV2();  // im2col + GEMM (formerly V4)
+    void forwardOptV3();  // im2col + GEMM + CUDA Streams
     
     void backward();
     void backwardBasic();
     void backwardOptV1();  // NCHW layout optimized (formerly V3)
     void backwardOptV2();  // im2col + GEMM (formerly V4)
+    void backwardOptV3();  // im2col + GEMM + CUDA Streams
     
     void updateWeights();
     
@@ -151,6 +155,12 @@ private:
     // Size: batch * max(inC*k*k * outH*outW) for largest layer
     float* d_im2col_workspace;
     size_t m_im2col_workspace_size;
+    
+    // CUDA Streams for V3 overlapped execution
+    cudaStream_t m_stream_compute;  // Primary compute stream
+    cudaStream_t m_stream_transfer; // Secondary stream for overlapped ops
+    cublasHandle_t m_cublas_handle; // Per-instance cuBLAS handle with stream
+    bool m_streams_initialized;     // Track stream initialization
 };
 
 #endif // GPU_MODEL_AUTOENCODER_H
