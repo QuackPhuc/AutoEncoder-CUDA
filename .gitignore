@@ -1,0 +1,255 @@
+# AutoEncoder CUDA - .gitignore
+
+# ===================================
+# Build Artifacts
+# ===================================
+build/
+bin/
+lib/
+*.exe
+*.out
+*.app
+
+# ===================================
+# CMake
+# ===================================
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# ===================================
+# C++ Compiled Objects
+# ===================================
+*.o
+*.obj
+*.lo
+*.slo
+*.ko
+*.elf
+*.d
+
+# ===================================
+# Libraries
+# ===================================
+*.lib
+*.a
+*.la
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# ===================================
+# Executables
+# ===================================
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# ===================================
+# Visual Studio
+# ===================================
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# ===================================
+# VS Code
+# ===================================
+.vscode/
+*.code-workspace
+
+# ===================================
+# CIFAR-10 Dataset (Large files)
+# ===================================
+data/*.bin
+data/*.tar.gz
+data/*.gz
+data/*.zip
+data/temp/
+data/cifar-10-batches-bin/
+data/cifar-10-binary/
+
+# Keep data directory structure
+!data/.gitkeep
+
+# ===================================
+# Model Checkpoints (Can be large)
+# ===================================
+checkpoints/*.bin
+checkpoints/*.pth
+checkpoints/*.pt
+checkpoints/*.ckpt
+checkpoints/*.h5
+checkpoints/*.weights
+
+# Keep checkpoints directory structure
+!checkpoints/.gitkeep
+!checkpoints/README.md
+
+# ===================================
+# Training Logs & Output
+# ===================================
+output/*.txt
+output/*.log
+output/*.csv
+output/*.png
+output/*.jpg
+
+# Keep output directory structure
+!output/.gitkeep
+
+# ===================================
+# Temporary Files
+# ===================================
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===================================
+# Python (if using for analysis/notebooks)
+# ===================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ===================================
+# Jupyter Notebooks temporary
+# ===================================
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# ===================================
+# CUDA
+# ===================================
+*.i
+*.ii
+*.gpu
+*.ptx
+*.cubin
+*.fatbin
+
+# ===================================
+# Documentation Generated
+# ===================================
+docs/_build/
+docs/_static/
+docs/_templates/
+*.pdf
+*.aux
+*.log
+*.toc
+*.out
+
+# Keep important docs
+!docs/report.pdf
+!.project/*.pdf
+
+# ===================================
+# Package Managers
+# ===================================
+node_modules/
+package-lock.json
+
+# ===================================
+# OS Generated
+# ===================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===================================
+# IDE
+# ===================================
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.cproject
+.settings/
+
+# ===================================
+# Profiling & Debug
+# ===================================
+*.nvvp
+*.nvprof
+*.qdrep
+callgrind.out.*
+perf.data*
+
+# ===================================
+# Implementations
+# ===================================
+.original/phase_*.md
+
+# ===================================
+# Keep Important Files
+# ===================================
+# Project structure files
+!.project/
+!.project/**
+
+# Documentation
+!README.md
+!QUICKSTART.md
+!FILE_MANIFEST.md
+!CHANGELOG.md
+
+# Scripts
+!scripts/
+!scripts/**
+
+# Tests
+!tests/
+!tests/**
+
+# Source code
+!src/
+!src/**
+
+# Build configuration
+!CMakeLists.txt
+!build.ps1
