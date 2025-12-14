@@ -21,14 +21,15 @@ In-depth documentation of the GPU optimization techniques implemented in this pr
 
 The project implements GPU optimization levels, each building on the previous:
 
-| Version  | Key Techniques                           | Speedup vs CPU |
-|----------|------------------------------------------|----------------|
-| Naive    | Per-pixel parallelization                | `<TBD>`        |
-| Opt v1   | NCHW layout, 2D grid, warp shuffle       | `<TBD>`        |
-| Opt v2   | im2col + cuBLAS GEMM                     | `<TBD>`        |
+| Version  | Key Techniques                           | Time/Epoch (s) | Speedup vs CPU |
+|----------|------------------------------------------|----------------|----------------|
+| CPU      | Sequential baseline                      | 169.18*        | 1.0x           |
+| Naive    | Per-pixel parallelization                | 500.57         | 169x           |
+| Opt v1   | NCHW layout, 2D grid, warp shuffle       | 247.15         | 342x           |
+| Opt v2   | im2col + cuBLAS GEMM                     | 50.52          | 1690x           |
 
 > [!NOTE]
-> The `<TBD>` values need to be measured on your specific hardware. See [How to Measure Metrics (Colab)](#how-to-measure-metrics-colab) for instructions.
+> *CPU baseline measured on 100 samples only (~23.5 hours/epoch estimated for full 50,000 samples). GPU values are per-epoch averages from 50,000 samples, 3 epochs on T4.
 
 ---
 

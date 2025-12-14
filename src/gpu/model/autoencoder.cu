@@ -335,9 +335,6 @@ std::vector<float> GPUAutoencoder::getFeatures(const std::vector<float>& h_input
     return extractBatchFeatures(h_input, 1);
 }
 
-// External optimized kernel declarations (defined in forward_pass.cu)
-// Removed old V1/V2 declarations
-
 // NCHW kernel declarations
 extern void launchConv2dNCHWRelu(
     const float* d_input, const float* d_weights, const float* d_bias, float* d_output,
@@ -376,7 +373,7 @@ std::vector<float> GPUAutoencoder::extractBatchFeatures(const std::vector<float>
     // Run encoder for batch - dispatch to appropriate optimized kernels
     switch (version) {
         case GPUVersion::GPU_OPT_V1:
-            // V1 (Formerly V3): NCHW layout with fused Conv+ReLU
+            // V1: NCHW layout with fused Conv+ReLU
             launchConv2dNCHWRelu(d_input, d_enc_conv1_w, d_enc_conv1_b, d_enc_relu1_out,
                                  numImages, 3, 32, 32, 256, 32, 32, 3, 1, 1);
             launchMaxPool2dNCHW(d_enc_relu1_out, d_enc_pool1_out, d_enc_pool1_indices,
@@ -389,7 +386,7 @@ std::vector<float> GPUAutoencoder::extractBatchFeatures(const std::vector<float>
             break;
             
         case GPUVersion::GPU_OPT_V2:
-            // V2 (Formerly V4): im2col + cuBLAS GEMM
+            // V2: im2col + cuBLAS GEMM
             // Layer 1: [batch,3,32,32] -> Conv+ReLU -> [batch,256,32,32] -> Pool -> [batch,256,16,16]
             launchIm2colNCHW(d_input, d_im2col_workspace,
                              numImages, 3, 32, 32, 32, 32, 3, 1, 1);

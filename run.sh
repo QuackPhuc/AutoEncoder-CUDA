@@ -148,6 +148,13 @@ build_infer_args() {
     local svm_path="$2"
     INFER_ARGS="--encoder-weights $encoder_path --svm-model $svm_path"
     [[ $BATCH_SIZE -gt 0 ]] && INFER_ARGS="$INFER_ARGS --batch-size $BATCH_SIZE"
+    
+    # Pass GPU version to inference for fast feature extraction
+    case $VERSION in
+        naive) INFER_ARGS="$INFER_ARGS --gpu-version 1" ;;
+        v1)    INFER_ARGS="$INFER_ARGS --gpu-version 2" ;;
+        v2)    INFER_ARGS="$INFER_ARGS --gpu-version 3" ;;
+    esac
 }
 
 # Display mode info

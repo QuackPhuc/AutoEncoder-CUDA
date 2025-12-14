@@ -15,17 +15,17 @@ The project demonstrates progressive CUDA optimization achieving significant GPU
 
 ### Performance Summary
 
-| Phase | Training Time | Speedup | Key Technique |
-|-------|---------------|---------|---------------|
-| CPU Baseline | 439.97 sec | 1.0x | Sequential |
-| GPU Naive | 2.64 sec | 166.7x | Basic Parallelization |
-| GPU Opt v1 | 1.85 sec | 237.0x | NCHW + 2D Grid + Warp Shuffle |
-| GPU Opt v2 | 1.65 sec | 266.0x | im2col + cuBLAS GEMM |
+| Phase | Time/Epoch | Speedup vs CPU | Key Technique |
+|-------|------------|----------------|---------------|
+| CPU Baseline | 169.18 sec* | 1.0x | Sequential |
+| GPU Naive (v1) | 500.57 sec | 169x | Basic Parallelization |
+| GPU Opt v1 | 247.15 sec | 342x | NCHW + 2D Grid + Warp Shuffle |
+| GPU Opt v2 | 50.52 sec | 1690x | im2col + cuBLAS GEMM |
 
 ***Notes:***
 
-- *Benchmarked on Tesla T4, 100 CIFAR-10 images, 3 epochs.*
-- *GPU Opt v2 full training on 50000 CIFAR-10 images, 20 epochs takes ~126 min.*
+- *CPU baseline measured on 100 samples only. Estimated full training (50,000 samples): ~23.5 hours/epoch.*
+- *GPU values: average per epoch from 50,000 samples, 3 epochs. (GPU: T4)*
 
 ## Quick Start
 

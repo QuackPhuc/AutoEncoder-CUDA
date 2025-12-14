@@ -12,6 +12,7 @@
 #include "cpu/evaluation/metrics.h"
 #include "cpu/evaluation/visualizer.h"
 #include "gpu/inference/feature_extractor.h"
+#include "config/gpu_config.h"
 
 void showHelp(const char* prog) {
     std::cout << "Usage: " << prog << " [OPTIONS]\n\n"
@@ -19,6 +20,7 @@ void showHelp(const char* prog) {
               << "  --encoder-weights PATH  Encoder weights path (default: ./checkpoints/encoder.weights)\n"
               << "  --svm-model PATH        SVM model path (default: ./checkpoints/svm.bin)\n"
               << "  --batch-size N          Batch size for feature extraction (default: 128)\n"
+              << "  --gpu-version N         GPU kernel version: 1=Basic, 2=OptV1, 3=OptV2 (default: 3)\n"
               << "  --train-svm             Train SVM and save model (default behavior)\n"
               << "  --evaluate-only         Skip SVM training, load existing model and evaluate\n"
               << "  --help                  Show this help message\n";
@@ -35,6 +37,7 @@ int main(int argc, char** argv) {
         std::string report_path = "./results/classification_report.txt";
         std::string confusion_csv = "./results/confusion_matrix.csv";
         int batch_size = 128;
+        int gpu_version = 3;  // Default: GPU_OPT_V2 (fastest)
         bool train_svm = true;  // Default: train SVM
         
         // Parse command line arguments
@@ -47,6 +50,12 @@ int main(int argc, char** argv) {
                 batch_size = std::atoi(argv[++i]);
                 if (batch_size <= 0) {
                     std::cerr << "Error: batch-size must be positive\n";
+                    return 1;
+                }
+            } else if (strcmp(argv[i], "--gpu-version") == 0 && i + 1 < argc) {
+                gpu_version = std::atoi(argv[++i]);
+                if (gpu_version < 1 || gpu_version > 3) {
+                    std::cerr << "Error: gpu-version must be 1, 2, or 3\n";
                     return 1;
                 }
             } else if (strcmp(argv[i], "--train-svm") == 0) {
@@ -79,9 +88,17 @@ int main(int argc, char** argv) {
             }
         }
         
+        // Set GPU version for feature extraction
+        switch (gpu_version) {
+            case 1: GPUConfig::getInstance().setVersion(GPUVersion::GPU_BASIC); break;
+            case 2: GPUConfig::getInstance().setVersion(GPUVersion::GPU_OPT_V1); break;
+            case 3: GPUConfig::getInstance().setVersion(GPUVersion::GPU_OPT_V2); break;
+        }
+        
         std::cout << "=== Inference Pipeline ===\n";
         std::cout << "Encoder: " << encoder_weights << "\n";
-        std::cout << "SVM:     " << svm_model_path << (train_svm ? " (will train)" : " (pre-trained)") << "\n\n";
+        std::cout << "SVM:     " << svm_model_path << (train_svm ? " (will train)" : " (pre-trained)") << "\n";
+        std::cout << "GPU:     " << GPUConfig::getInstance().getVersionName() << "\n\n";
         
         // Load dataset
         std::cout << "Loading CIFAR-10...\n";
@@ -112,7 +129,7 @@ int main(int argc, char** argv) {
         std::cout << "Feature extraction: " << std::fixed << std::setprecision(1) << extraction_time << "s\n\n";
         
         // SVM
-        gpu_svm::ThunderSVMTrainer svm_trainer(10.0, -1.0);
+        gpu_svm::ThunderSVMTrainer svm_trainer(100.0, -1.0); // C =  100
         double svm_train_time = 0;
         
         if (train_svm) {
