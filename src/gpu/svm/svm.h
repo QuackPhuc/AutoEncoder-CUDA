@@ -27,8 +27,6 @@ public:
 
     void save_model(const std::string& filepath) const;
     void load_model(const std::string& filepath);
-
-    bool is_trained() const { return model_ != nullptr; }
     
     std::vector<int> predict_batch(
         const std::vector<float>& features,

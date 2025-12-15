@@ -35,16 +35,16 @@ float Trainer::trainEpoch(int batchSize) {
         auto batchImages = m_dataset.getBatch(batchIdx, batchSize);
         
         float batchLoss = 0.0f;
-        int imageSize = 32 * 32 * 3;
-        int actualBatchSize = static_cast<int>(batchImages.size()) / imageSize;
+        constexpr int IMAGE_SIZE = 32 * 32 * 3;  // CIFAR-10: 32x32 RGB = 3072 floats
+        int actualBatchSize = static_cast<int>(batchImages.size()) / IMAGE_SIZE;
         
         // MINI-BATCH SGD: Zero gradients at the START of each batch
         m_model.zeroGradients();
         
         for (int i = 0; i < actualBatchSize; ++i) {
-            std::vector<float> image(imageSize);
-            std::copy(batchImages.begin() + i * imageSize,
-                     batchImages.begin() + (i + 1) * imageSize,
+            std::vector<float> image(IMAGE_SIZE);
+            std::copy(batchImages.begin() + i * IMAGE_SIZE,
+                     batchImages.begin() + (i + 1) * IMAGE_SIZE,
                      image.begin());
             
             // Forward pass

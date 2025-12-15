@@ -54,10 +54,6 @@ private:
     ReLU m_relu4;
     Upsample2D m_up2;
     Conv2D m_conv5;      // (256 -> 3)
-    
-    // Cached activations for backward pass
-    std::vector<float> m_act1, m_act2, m_act3, m_act4, m_act5, m_act6;
-    std::vector<float> m_act7, m_act8, m_act9, m_act10, m_act11, m_act12;
 };
 
 #endif // AUTOENCODER_H

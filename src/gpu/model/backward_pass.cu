@@ -197,10 +197,6 @@ extern void launchUpsample2dBackwardNCHW(
     const float* d_gradOutput, float* d_gradInput,
     int batch, int channels, int inH, int inW, int scale);
 
-// Simple ReLU backward for NCHW (element-wise, no layout difference)
-extern __global__ void reluBackwardKernel(
-    const float* gradOutput, const float* input, float* gradInput, int size);
-
 // Optimized backward pass v1 (NCHW layout)
 void GPUAutoencoder::backwardOptV1() {
     int blockSize = 256;

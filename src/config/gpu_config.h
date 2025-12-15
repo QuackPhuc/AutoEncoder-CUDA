@@ -28,18 +28,7 @@ public:
     std::string getVersionFileName() const;
     
     int getBatchSize() const;
-    void setBatchSize(int batchSize);
     void setVersion(GPUVersion version) { m_version = version; }
-    
-    // Returns CUDA block size (threads per block)
-    int getBlockSize() const;
-    
-    // Feature flags based on version
-    bool useSharedMemory() const;
-    bool useKernelFusion() const;
-    bool useStreams() const;
-    
-    std::string getOptimizationDesc() const;
     
 private:
     GPUConfig() : m_version(GPUVersion::GPU_BASIC), m_batchSize(0) {}

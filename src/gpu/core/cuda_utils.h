@@ -30,18 +30,6 @@
         } \
     } while(0)
 
-// Calculate grid size for 1D kernel launch
-inline int getGridSize(int totalThreads, int blockSize) {
-    return (totalThreads + blockSize - 1) / blockSize;
-}
-
-// Calculate grid dimensions for 2D kernel launch
-inline dim3 getGrid2D(int width, int height, int blockWidth, int blockHeight) {
-    return dim3(
-        (width + blockWidth - 1) / blockWidth,
-        (height + blockHeight - 1) / blockHeight
-    );
-}
 
 // Print GPU device information (compact)
 inline void printGPUInfo() {

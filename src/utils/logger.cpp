@@ -32,11 +32,3 @@ void Logger::logEpoch(int epoch, int totalEpochs, float loss, double timeSeconds
         m_logFile.flush();
     }
 }
-
-void Logger::log(const std::string& message) {
-    std::cout << message << std::endl;
-    if (m_fileLogging) {
-        m_logFile << message << std::endl;
-        m_logFile.flush();
-    }
-}

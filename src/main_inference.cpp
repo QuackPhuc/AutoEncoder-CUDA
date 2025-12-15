@@ -14,7 +14,7 @@
 #include "gpu/inference/feature_extractor.h"
 #include "config/gpu_config.h"
 
-void showHelp(const char* prog) {
+void showUsage(const char* prog) {
     std::cout << "Usage: " << prog << " [OPTIONS]\n\n"
               << "OPTIONS:\n"
               << "  --encoder-weights PATH  Encoder weights path (default: ./checkpoints/encoder.weights)\n"
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
             } else if (strcmp(argv[i], "--evaluate-only") == 0) {
                 train_svm = false;
             } else if (strcmp(argv[i], "--help") == 0) {
-                showHelp(argv[0]);
+                showUsage(argv[0]);
                 return 0;
             }
         }

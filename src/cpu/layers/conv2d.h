@@ -28,17 +28,12 @@ public:
     void updateWeights(float learningRate);
     
     void initializeWeights();
-    void saveWeights(const std::string& filepath) const;
-    void loadWeights(const std::string& filepath);
     
     // Accessors for unified save/load format
     const std::vector<float>& getWeights() const { return m_weights; }
     const std::vector<float>& getBias() const { return m_bias; }
     std::vector<float>& getWeights() { return m_weights; }
     std::vector<float>& getBias() { return m_bias; }
-    
-    int getOutputHeight() const { return m_outH; }
-    int getOutputWidth() const { return m_outW; }
 
 private:
     float getPaddedValue(const std::vector<float>& input, int h, int w, int c) const;

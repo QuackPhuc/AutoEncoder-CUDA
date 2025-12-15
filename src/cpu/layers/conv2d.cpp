@@ -149,30 +149,3 @@ float Conv2D::getPaddedValue(const std::vector<float>& input, int h, int w, int 
     int idx = (h * m_inW + w) * m_inChannels + c;
     return input[idx];
 }
-
-void Conv2D::saveWeights(const std::string& filepath) const {
-    std::ofstream file(filepath, std::ios::binary);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file for writing: " + filepath);
-    }
-    
-    file.write(reinterpret_cast<const char*>(m_weights.data()), 
-               m_weights.size() * sizeof(float));
-    file.write(reinterpret_cast<const char*>(m_bias.data()), 
-               m_bias.size() * sizeof(float));
-    file.close();
-}
-
-void Conv2D::loadWeights(const std::string& filepath) {
-    std::ifstream file(filepath, std::ios::binary);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file for reading: " + filepath);
-    }
-    
-    file.read(reinterpret_cast<char*>(m_weights.data()), 
-              m_weights.size() * sizeof(float));
-    file.read(reinterpret_cast<char*>(m_bias.data()), 
-              m_bias.size() * sizeof(float));
-    file.close();
-}
-

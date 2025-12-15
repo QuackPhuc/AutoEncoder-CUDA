@@ -35,11 +35,6 @@ public:
     void printMetrics(const Metrics& metrics,
                       const std::string& versionName) const;
 
-    // Appends metrics to CSV file
-    void saveMetrics(const Metrics& metrics,
-                     const std::string& versionName,
-                     const std::string& filepath) const;
-
 private:
     size_t getGPUMemoryUsage() const;
 };

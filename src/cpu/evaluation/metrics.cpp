@@ -30,35 +30,6 @@ void ClassificationMetrics::print_summary() const {
     std::cout << "============================================\n\n";
 }
 
-void ClassificationMetrics::save_to_file(const std::string& filepath) const {
-    std::ofstream file(filepath);
-    if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file: " + filepath);
-    }
-    
-    file << "========== CIFAR-10 Classification Metrics ==========\n\n";
-    file << "Overall Accuracy: " << std::fixed << std::setprecision(2)
-         << overall_accuracy << "%\n\n";
-    
-    file << "Per-Class Results:\n";
-    file << std::setw(15) << "Class" 
-         << std::setw(12) << "Accuracy" 
-         << std::setw(10) << "Count\n";
-    file << std::string(37, '-') << "\n";
-    
-    for (size_t i = 0; i < per_class_accuracy.size(); ++i) {
-        const std::string& class_name = (i < CIFAR10_CLASS_NAMES.size()) 
-            ? CIFAR10_CLASS_NAMES[i] : "Unknown";
-        file << std::setw(15) << class_name
-             << std::setw(11) << std::fixed << std::setprecision(2)
-             << per_class_accuracy[i] << "%"
-             << std::setw(10) << class_counts[i] << "\n";
-    }
-    
-    file << "\n=====================================================\n";
-    file.close();
-}
-
 ClassificationMetrics MetricsCalculator::calculate(
     const std::vector<int>& predictions,
     const std::vector<uint8_t>& ground_truth,

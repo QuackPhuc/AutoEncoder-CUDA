@@ -86,9 +86,10 @@ src/
 │       └── trainer.h
 ├── gpu/                          # GPU implementation
 │   ├── core/                     # CUDA utilities
-│   │   ├── cuda_utils.h          # Error checking macros
-│   │   ├── memory.cu             # GPU memory allocation
-│   │   └── memory.h
+│   │   ├── cuda_utils.h          # Error checking macros, printGPUInfo
+│   │   ├── device_reset.cu/h     # GPU device reset
+│   │   ├── kernel_config.h       # Block/grid size macros
+│   │   └── layout_convert.cu/h   # NHWC<->NCHW conversion
 │   ├── inference/                # Feature extraction
 │   │   ├── feature_extractor.cu  # Batched feature extraction
 │   │   └── feature_extractor.h
@@ -119,8 +120,6 @@ src/
 │   ├── gpu_config.cpp            # GPU version selection
 │   └── gpu_config.h
 ├── benchmarking/                 # Performance profiling
-│   ├── comparator.cpp            # Version comparison
-│   ├── comparator.h
 │   ├── profiler.cpp              # Training metrics
 │   └── profiler.h
 ├── utils/                        # Utilities
@@ -284,8 +283,6 @@ public:
     void parseCommandLine(int argc, char** argv);
     GPUVersion getVersion() const;
     int getBatchSize() const;
-    bool useSharedMemory() const;
-    bool useKernelFusion() const;
 };
 ```
 
@@ -310,23 +307,17 @@ public:
 
 ### GPU Memory Management
 
-Memory buffers are allocated once during initialization and reused across batches.
+Memory buffers are allocated in `GPUAutoencoder::allocateMemory()` during construction and reused across batches. Memory is managed as member variables of the `GPUAutoencoder` class:
 
 ```cpp
-struct GPUBuffers {
-    // Input/Output
+class GPUAutoencoder {
+private:
+    // Device memory pointers (member variables)
     float* d_input;           // (batch, 32, 32, 3)
     float* d_output;          // (batch, 32, 32, 3)
-    float* d_target;          // (batch, 32, 32, 3)
-    
-    // Encoder Layer 1
     float* d_enc_conv1_w;     // (256, 3, 3, 3)
     float* d_enc_conv1_b;     // (256)
-    float* d_enc_conv1_out;   // (batch, 32, 32, 256)
-    float* d_enc_relu1_out;   // (batch, 32, 32, 256)
-    float* d_enc_pool1_out;   // (batch, 16, 16, 256)
-    int* d_enc_pool1_indices; // MaxPool indices for backward
-    // ... additional layers
+    // ... additional layer buffers
 };
 ```
 
@@ -490,7 +481,6 @@ public:
         
     void save_model(const std::string& filepath) const;
     void load_model(const std::string& filepath);
-    bool is_trained() const;
 };
 
 } // namespace gpu_svm
@@ -616,14 +606,7 @@ void launchMyNewKernel(...) {
 
 To change the autoencoder architecture:
 
-1. Update layer dimensions in `src/gpu/core/memory.h`:
-
-```cpp
-struct LayerSizes {
-    static constexpr int ENC1_OUT_C = 256;  // Modify as needed
-    // ...
-};
-```
+1. Update layer dimensions directly in `src/gpu/model/autoencoder.cu`:
 
 2. Update memory allocation in `GPUAutoencoder::allocateMemory()`.
 
@@ -670,7 +653,6 @@ All CUDA calls use the `CHECK_CUDA` macro:
 GPUProfiler profiler;
 GPUProfiler::Metrics metrics = profiler.profileTraining(model, dataset, epochs);
 profiler.printMetrics(metrics, "GPU_OPT_V2");
-profiler.saveMetrics(metrics, "GPU_OPT_V2", "./results/metrics.csv");
 ```
 
 ### Metrics Collected

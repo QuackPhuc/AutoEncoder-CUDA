@@ -14,12 +14,3 @@ __global__ void reluForwardKernel(
         output[idx] = fmaxf(0.0f, input[idx]);
     }
 }
-
-// Host wrapper: Naive ReLU forward
-void launchReluForward(const float* d_input, float* d_output, int size) {
-    int blockSize = CUDA_BLOCK_SIZE;
-    int gridSize = CUDA_GRID_SIZE(size);
-    
-    reluForwardKernel<<<gridSize, blockSize>>>(d_input, d_output, size);
-    CHECK_CUDA(cudaGetLastError());
-}

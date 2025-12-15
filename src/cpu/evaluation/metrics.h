@@ -15,7 +15,6 @@ struct ClassificationMetrics {
     std::vector<int> class_counts;                 // Samples per class
     
     void print_summary() const;
-    void save_to_file(const std::string& filepath) const;
 };
 
 // Metrics calculation utility class

@@ -13,7 +13,6 @@ public:
     
     // Log epoch progress: epoch/totalEpochs, loss value, and elapsed time
     void logEpoch(int epoch, int totalEpochs, float loss, double timeSeconds);
-    void log(const std::string& message);
 
 private:
     std::ofstream m_logFile;

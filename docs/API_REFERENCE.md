@@ -178,11 +178,9 @@ SGD weight update: w -= lr * grad_w
 
 ```cpp
 void initializeWeights();
-void saveWeights(const std::string& filepath) const;
-void loadWeights(const std::string& filepath);
 ```
 
-Weight management.
+Weight initialization (He initialization).
 
 ---
 
@@ -577,14 +575,6 @@ Model persistence.
 ---
 
 ```cpp
-bool is_trained() const;
-```
-
-Returns training status.
-
----
-
-```cpp
 std::vector<int> predict_batch(
     const std::vector<float>& features,
     int num_samples,
@@ -625,7 +615,6 @@ Structure holding classification evaluation results.
 
 ```cpp
 void print_summary() const;
-void save_to_file(const std::string& filepath) const;
 ```
 
 ---
@@ -752,32 +741,6 @@ Returns recommended batch size (32 for CPU, 64 for GPU).
 
 ---
 
-```cpp
-int getBlockSize() const;
-```
-
-Returns CUDA block size (threads per block).
-
----
-
-```cpp
-bool useSharedMemory() const;
-bool useKernelFusion() const;
-bool useStreams() const;
-```
-
-Feature flags based on version.
-
----
-
-```cpp
-std::string getOptimizationDesc() const;
-```
-
-Returns description of optimizations enabled.
-
----
-
 ## Utilities
 
 ### Timer
@@ -804,8 +767,7 @@ Simple logging utility.
 #### Methods
 
 ```cpp
-void log(const std::string& message);
-void logProgress(int current, int total);
+void logEpoch(int epoch, int totalEpochs, float loss, double timeSeconds);
 ```
 
 ---
@@ -840,11 +802,6 @@ Metrics profileTraining(
 void printMetrics(
     const Metrics& metrics,
     const std::string& versionName) const;
-
-void saveMetrics(
-    const Metrics& metrics,
-    const std::string& versionName,
-    const std::string& filepath) const;
 ```
 
 ---
@@ -853,128 +810,9 @@ void saveMetrics(
 
 ### Forward Pass Kernels
 
-Host wrapper functions in `src/gpu/kernels/forward/`:
+Kernels in `src/gpu/kernels/forward/` are primarily called directly via `extern` declarations for GPU_BASIC, or through NCHW host wrappers for GPU_OPT_V1+.
 
-```cpp
-// Naive convolution
-void launchConv2dNaive(
-    const float* d_input, const float* d_weights, 
-    const float* d_bias, float* d_output,
-    int batch, int inH, int inW, int inC,
-    int outH, int outW, int outC,
-    int kernelSize, int padding, int stride);
-
-// Shared memory convolution (Opt v1)
-void launchConv2dShared(
-    const float* d_input, const float* d_weights, 
-    float* d_output,
-    int batch, int inH, int inW, int inC,
-    int outH, int outW, int outC,
-    int kernelSize, int padding, int stride);
-
-// Fused Conv + ReLU (Opt v2)
-void launchConv2dSharedRelu(
-    const float* d_input, const float* d_weights, 
-    float* d_output,
-    int batch, int inH, int inW, int inC,
-    int outH, int outW, int outC,
-    int kernelSize, int padding, int stride);
-
-// Copy bias to constant memory
-void copyBiasToConstant(const float* h_bias, int size);
-
-// ReLU activation
-void launchRelu(const float* d_input, float* d_output, int size);
-
-// MaxPool 2x2
-void launchMaxPool2d(
-    const float* d_input, float* d_output, int* d_indices,
-    int batch, int inH, int inW, int channels);
-
-// Upsample 2x (nearest neighbor)
-void launchUpsample2d(
-    const float* d_input, float* d_output,
-    int batch, int inH, int inW, int channels);
-
-// MSE Loss
-void launchMSELoss(
-    const float* d_pred, const float* d_target,
-    float* d_loss, int size);
-
-void launchMSELossGrad(
-    const float* d_pred, const float* d_target,
-    float* d_grad, int size);
-```
-
-### Backward Pass Kernels
-
-Host wrapper functions in `src/gpu/kernels/backward/`:
-
-```cpp
-// Conv2D gradients
-void launchConv2dBackwardInput(
-    const float* d_gradOutput, const float* d_weights, 
-    float* d_gradInput,
-    int batch, int inH, int inW, int inC,
-    int outH, int outW, int outC,
-    int kernelSize, int padding, int stride);
-
-void launchConv2dBackwardWeights(
-    const float* d_gradOutput, const float* d_input, 
-    float* d_gradWeights,
-    int batch, int inH, int inW, int inC,
-    int outH, int outW, int outC,
-    int kernelSize, int padding, int stride);
-
-void launchConv2dBackwardBias(
-    const float* d_gradOutput, float* d_gradBias,
-    int batch, int outH, int outW, int outC);
-
-// ReLU gradient
-void launchReluBackward(
-    const float* d_gradOutput, const float* d_input,
-    float* d_gradInput, int size);
-
-// MaxPool gradient
-void launchMaxPool2dBackward(
-    const float* d_gradOutput, const int* d_indices,
-    float* d_gradInput,
-    int batch, int inH, int inW, int channels);
-
-// Upsample gradient
-void launchUpsample2dBackward(
-    const float* d_gradOutput, float* d_gradInput,
-    int batch, int inH, int inW, int channels);
-
-// SGD weight update
-void launchSGDUpdate(
-    float* d_weights, const float* d_gradients,
-    int size, float learningRate);
-```
-
-### CUDA Utilities
-
-**Header**: `src/gpu/core/cuda_utils.h`
-
-```cpp
-// Error checking macro
-#define CHECK_CUDA(call) \
-    do { \
-        cudaError_t err = call; \
-        if (err != cudaSuccess) { \
-            fprintf(stderr, "CUDA error at %s:%d: %s\n", \
-                    __FILE__, __LINE__, cudaGetErrorString(err)); \
-            exit(EXIT_FAILURE); \
-        } \
-    } while(0)
-
-// Print GPU device info
-void printGPUInfo();
-```
-
-### NCHW Kernels (V3)
-
-Host wrapper functions for NCHW layout optimization:
+**NCHW Kernels (GPU Opt V1/V2/V3):**
 
 ```cpp
 // NCHW convolution with optional ReLU fusion
@@ -1001,7 +839,76 @@ void launchMaxPool2dNCHW(
 // NCHW upsample
 void launchUpsample2dNCHW(
     const float* d_input, float* d_output,
-    int batch, int channels, int inH, int inW);
+    int batch, int channels, int inH, int inW,
+    int scale);
+
+// Stream-aware versions (GPU Opt V3)
+void launchMaxPool2dNCHWStream(/* same params */ cudaStream_t stream);
+void launchUpsample2dNCHWStream(/* same params */ cudaStream_t stream);
+```
+
+### Backward Pass Kernels
+
+Backward kernels are located in `src/gpu/kernels/backward/`. For GPU_BASIC, kernels are called directly via `extern` declarations. For GPU_OPT_V1+, NCHW host wrappers are used.
+
+**NCHW Wrappers (GPU Opt V1/V2/V3):**
+
+```cpp
+// NCHW Conv2D gradients
+void launchConv2dBackwardInputNCHW(
+    const float* d_gradOutput, const float* d_weights, 
+    float* d_gradInput,
+    int batch, int inC, int inH, int inW,
+    int outC, int outH, int outW,
+    int kernelSize, int padding, int stride);
+
+void launchConv2dBackwardWeightsNCHW(
+    const float* d_input, const float* d_gradOutput, 
+    float* d_gradWeights,
+    int batch, int inC, int inH, int inW,
+    int outC, int outH, int outW,
+    int kernelSize, int padding, int stride);
+
+void launchConv2dBackwardBiasNCHW(
+    const float* d_gradOutput, float* d_gradBias,
+    int batch, int outC, int outH, int outW);
+
+// NCHW MaxPool gradient
+void launchMaxPool2dBackwardNCHW(
+    const float* d_gradOutput, const int* d_indices,
+    float* d_gradInput,
+    int batch, int channels, int inH, int inW,
+    int k, int stride);
+
+// NCHW Upsample gradient
+void launchUpsample2dBackwardNCHW(
+    const float* d_gradOutput, float* d_gradInput,
+    int batch, int channels, int inH, int inW,
+    int scale);
+
+// Stream-aware versions (GPU Opt V3)
+void launchMaxPool2dBackwardNCHWStream(/* same params */ cudaStream_t stream);
+void launchUpsample2dBackwardNCHWStream(/* same params */ cudaStream_t stream);
+```
+
+### CUDA Utilities
+
+**Header**: `src/gpu/core/cuda_utils.h`
+
+```cpp
+// Error checking macro
+#define CHECK_CUDA(call) \
+    do { \
+        cudaError_t err = call; \
+        if (err != cudaSuccess) { \
+            fprintf(stderr, "CUDA error at %s:%d: %s\n", \
+                    __FILE__, __LINE__, cudaGetErrorString(err)); \
+            exit(EXIT_FAILURE); \
+        } \
+    } while(0)
+
+// Print GPU device info
+void printGPUInfo();
 ```
 
 ### im2col + GEMM Kernels (V4)

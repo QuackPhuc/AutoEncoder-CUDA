@@ -72,40 +72,6 @@ __global__ void upsample2dForwardKernel(
     output[idx] = input[inputIdx];
 }
 
-// Host wrapper: Naive MaxPool2D forward
-void launchMaxPool2dForward(
-    const float* d_input, float* d_output, int* d_indices,
-    int batch, int inH, int inW, int channels
-) {
-    int outH = inH / 2;
-    int outW = inW / 2;
-    int totalThreads = batch * outH * outW * channels;
-    int blockSize = CUDA_BLOCK_SIZE;
-    int gridSize = CUDA_GRID_SIZE(totalThreads);
-    
-    maxpool2dForwardKernel<<<gridSize, blockSize>>>(
-        d_input, d_output, d_indices, batch, inH, inW, channels
-    );
-    CHECK_CUDA(cudaGetLastError());
-}
-
-// Host wrapper: Naive Upsample2D forward
-void launchUpsample2dForward(
-    const float* d_input, float* d_output,
-    int batch, int inH, int inW, int channels
-) {
-    int outH = inH * 2;
-    int outW = inW * 2;
-    int totalThreads = batch * outH * outW * channels;
-    int blockSize = CUDA_BLOCK_SIZE;
-    int gridSize = CUDA_GRID_SIZE(totalThreads);
-    
-    upsample2dForwardKernel<<<gridSize, blockSize>>>(
-        d_input, d_output, batch, inH, inW, channels
-    );
-    CHECK_CUDA(cudaGetLastError());
-}
-
 // NCHW MaxPool2D kernel with 2D grid indexing (2x2 pooling, stride 2)
 __global__ void maxpool2dForwardNCHWKernel(
     const float* __restrict__ input,   // (batch, channels, inH, inW)

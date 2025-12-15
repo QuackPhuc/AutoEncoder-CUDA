@@ -89,27 +89,6 @@ void GPUProfiler::printMetrics(
     std::cout << "========================================\n";
 }
 
-void GPUProfiler::saveMetrics(
-    const Metrics& metrics,
-    const std::string& versionName,
-    const std::string& filepath) const
-{
-    std::ofstream outFile(filepath, std::ios::app);
-    if (!outFile.is_open()) {
-        std::cerr << "Error: Could not open " << filepath << " for writing\n";
-        return;
-    }
-
-    // CSV format: version,time,epochTime,loss,memory,occupancy,bandwidth
-    outFile << versionName << ","
-            << metrics.trainingTimeSec << ","
-            << metrics.timePerEpochSec << ","
-            << metrics.finalLoss << ","
-            << metrics.gpuMemoryUsedBytes << ","
-            << metrics.kernelOccupancy << ","
-            << metrics.memoryBandwidthUtil << "\n";
-}
-
 size_t GPUProfiler::getGPUMemoryUsage() const {
     size_t freeMem = 0;
     size_t totalMem = 0;
