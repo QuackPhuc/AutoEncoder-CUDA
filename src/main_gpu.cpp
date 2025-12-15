@@ -14,6 +14,7 @@ void showUsage(const char* programName) {
     std::cout << "                         1 = GPU Basic\n";
     std::cout << "                         2 = GPU Opt v1 (NCHW)\n";
     std::cout << "                         3 = GPU Opt v2 (im2col+GEMM)\n";
+    std::cout << "                         4 = GPU Opt v3 (im2col+GEMM+Streams)\n";
     std::cout << "  --epochs <N>           Number of training epochs (default: 20)\n";
     std::cout << "  --samples <N>          Number of training samples (0=all, default: 0)\n";
     std::cout << "  --batch-size <N>       Batch size (0=auto, default: 0)\n";
