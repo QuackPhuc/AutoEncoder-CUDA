@@ -405,6 +405,9 @@ void launchConv2dBackwardBias(...);
 | NCHW layout            | Channels-first memory layout                   |
 | 2D grid indexing       | dim3 block(16,16) for spatial locality         |
 | 3x3 unrolling          | Compile-time loop unrolling                    |
+| Fused Conv+ReLU        | Eliminates intermediate memory writes          |
+| `__restrict__` hints   | Compiler optimization for non-overlapping ptrs |
+| Cache-optimized access | Relies on L1/L2 cache (no explicit shared mem) |
 | Warp shuffle reduction | `__shfl_down_sync` for bias gradients          |
 
 ### GPU Opt v2: im2col + cuBLAS GEMM
@@ -419,13 +422,13 @@ void launchConv2dBackwardBias(...);
 ### Block and Grid Configuration
 
 ```cpp
-// Shared memory convolution
-dim3 block(TILE_SIZE, TILE_SIZE);  // 16x16 threads
-dim3 grid((outW + TILE_SIZE - 1) / TILE_SIZE,
-          (outH + TILE_SIZE - 1) / TILE_SIZE,
-          batch * outC);
-
-size_t sharedMem = SHARED_TILE_SIZE * SHARED_TILE_SIZE * sizeof(float);
+// 2D grid for NCHW convolution (cache-optimized, no explicit shared memory)
+dim3 block(16, 16);
+dim3 grid(
+    (outW + block.x - 1) / block.x,
+    (outH + block.y - 1) / block.y,
+    batch * outC
+);
 ```
 
 ---

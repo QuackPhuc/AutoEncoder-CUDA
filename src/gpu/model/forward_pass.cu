@@ -1,8 +1,11 @@
 #include "autoencoder.h"
 #include "gpu/core/cuda_utils.h"
 #include "gpu/core/layout_convert.h"
+#include "gpu/core/mixed_precision.h"
+#include "gpu/kernels/gemm/conv_gemm.h"
 #include "config/gpu_config.h"
 #include <cuda_runtime.h>
+#include <cuda_fp16.h>
 
 // External kernel declarations (from kernels/forward/)
 extern __global__ void conv2dForwardKernel(
@@ -260,92 +263,146 @@ void GPUAutoencoder::forwardOptV3() {
     cudaStream_t s_comp = m_stream_compute;
     cudaStream_t s_aux = m_stream_transfer;
     
-    // ========================
-    // Layer 1: Conv+ReLU+Pool
-    // ========================
-    // im2col on aux stream
-    launchIm2colNCHWStream(d_input, d_im2col_workspace,
-                           m_batchSize, 3, 32, 32, 32, 32, 3, 1, 1, s_aux);
-    // Wait for im2col to complete before GEMM reads it
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    // V3 Advanced: Use CUDA Graph for reduced launch overhead
+    if (m_graphs_captured) {
+        // Replay captured graph (fast path)
+        CHECK_CUDA(cudaGraphLaunch(m_forward_graph_exec, s_comp));
+        CHECK_CUDA(cudaStreamSynchronize(s_comp));
+        return;
+    }
     
-    // GEMM+bias+ReLU on compute stream
-    launchConvGemmForwardStream(d_enc_conv1_w, d_im2col_workspace, d_enc_conv1_b,
-                                d_enc_relu1_out,
-                                m_batchSize, 256, 27, 1024,
-                                m_cublas_handle, s_comp, true);
-    // Wait for GEMM before pooling
-    CHECK_CUDA(cudaStreamSynchronize(s_comp));
+    // First call: capture forward pass to graph
+    CHECK_CUDA(cudaStreamBeginCapture(s_comp, cudaStreamCaptureModeGlobal));
     
-    // MaxPool on aux stream
-    launchMaxPool2dNCHWStream(d_enc_relu1_out, d_enc_pool1_out, d_enc_pool1_indices,
-                              m_batchSize, 256, 32, 32, 2, 2, s_aux);
+    // Execute kernels (will be captured)
+    forwardOptV3_kernels();
     
-    // ========================
-    // Layer 2: Conv+ReLU+Pool
-    // ========================
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    launchIm2colNCHWStream(d_enc_pool1_out, d_im2col_workspace,
-                           m_batchSize, 256, 16, 16, 16, 16, 3, 1, 1, s_aux);
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
+    CHECK_CUDA(cudaStreamEndCapture(s_comp, &m_forward_graph));
+    CHECK_CUDA(cudaGraphInstantiate(&m_forward_graph_exec, m_forward_graph, NULL, NULL, 0));
+    m_graphs_captured = true;
     
-    launchConvGemmForwardStream(d_enc_conv2_w, d_im2col_workspace, d_enc_conv2_b,
-                                d_enc_relu2_out,
-                                m_batchSize, 128, 2304, 256,
-                                m_cublas_handle, s_comp, true);
-    CHECK_CUDA(cudaStreamSynchronize(s_comp));
-    
-    launchMaxPool2dNCHWStream(d_enc_relu2_out, d_enc_pool2_out, d_enc_pool2_indices,
-                              m_batchSize, 128, 16, 16, 2, 2, s_aux);
-    
-    // ========================
-    // Layer 3: Conv+ReLU+Upsample
-    // ========================
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    launchIm2colNCHWStream(d_enc_pool2_out, d_im2col_workspace,
-                           m_batchSize, 128, 8, 8, 8, 8, 3, 1, 1, s_aux);
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    
-    launchConvGemmForwardStream(d_dec_conv3_w, d_im2col_workspace, d_dec_conv3_b,
-                                d_dec_relu3_out,
-                                m_batchSize, 128, 1152, 64,
-                                m_cublas_handle, s_comp, true);
-    CHECK_CUDA(cudaStreamSynchronize(s_comp));
-    
-    launchUpsample2dNCHWStream(d_dec_relu3_out, d_dec_up1_out,
-                               m_batchSize, 128, 8, 8, 2, s_aux);
-    
-    // ========================
-    // Layer 4: Conv+ReLU+Upsample
-    // ========================
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    launchIm2colNCHWStream(d_dec_up1_out, d_im2col_workspace,
-                           m_batchSize, 128, 16, 16, 16, 16, 3, 1, 1, s_aux);
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    
-    launchConvGemmForwardStream(d_dec_conv4_w, d_im2col_workspace, d_dec_conv4_b,
-                                d_dec_relu4_out,
-                                m_batchSize, 256, 1152, 256,
-                                m_cublas_handle, s_comp, true);
-    CHECK_CUDA(cudaStreamSynchronize(s_comp));
-    
-    launchUpsample2dNCHWStream(d_dec_relu4_out, d_dec_up2_out,
-                               m_batchSize, 256, 16, 16, 2, s_aux);
-    
-    // ========================
-    // Layer 5: Conv only (no ReLU)
-    // ========================
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    launchIm2colNCHWStream(d_dec_up2_out, d_im2col_workspace,
-                           m_batchSize, 256, 32, 32, 32, 32, 3, 1, 1, s_aux);
-    CHECK_CUDA(cudaStreamSynchronize(s_aux));
-    
-    launchConvGemmForwardStream(d_dec_conv5_w, d_im2col_workspace, d_dec_conv5_b,
-                                d_output,
-                                m_batchSize, 3, 2304, 1024,
-                                m_cublas_handle, s_comp, false);
-    
-    // Ensure all operations complete before returning
+    // Run the captured graph
+    CHECK_CUDA(cudaGraphLaunch(m_forward_graph_exec, s_comp));
     CHECK_CUDA(cudaStreamSynchronize(s_comp));
 }
+
+// Internal kernel calls for graph capture
+void GPUAutoencoder::forwardOptV3_kernels() {
+    // V3 uses FP16 GEMM if Tensor Cores are available, otherwise FP32
+    // All operations go on the same stream for graph capture
+    
+    if (m_use_tensor_cores && d_im2col_fp16 && d_weights_fp16) {
+        // =====================================================
+        // FP16 Tensor Core Path (T4, A100, etc.)
+        // =====================================================
+        
+        // Weight offsets in packed FP16 buffer
+        size_t w1_offset = 0;
+        size_t w2_offset = 256 * 27;
+        size_t w3_offset = w2_offset + 128 * 2304;
+        size_t w4_offset = w3_offset + 128 * 1152;
+        size_t w5_offset = w4_offset + 256 * 1152;
+        
+        // Layer 1: im2col→FP16 + GEMM + Pool
+        launchIm2colFP16(d_input, d_im2col_fp16,
+                         m_batchSize, 3, 32, 32, 32, 32, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardFP16(d_weights_fp16 + w1_offset, d_im2col_fp16, d_enc_conv1_b,
+                                  d_enc_relu1_out,
+                                  m_batchSize, 256, 27, 1024,
+                                  m_cublas_handle, m_stream_compute, true);
+        launchMaxPool2dNCHWStream(d_enc_relu1_out, d_enc_pool1_out, d_enc_pool1_indices,
+                                  m_batchSize, 256, 32, 32, 2, 2, m_stream_compute);
+        
+        // Layer 2
+        launchIm2colFP16(d_enc_pool1_out, d_im2col_fp16,
+                         m_batchSize, 256, 16, 16, 16, 16, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardFP16(d_weights_fp16 + w2_offset, d_im2col_fp16, d_enc_conv2_b,
+                                  d_enc_relu2_out,
+                                  m_batchSize, 128, 2304, 256,
+                                  m_cublas_handle, m_stream_compute, true);
+        launchMaxPool2dNCHWStream(d_enc_relu2_out, d_enc_pool2_out, d_enc_pool2_indices,
+                                  m_batchSize, 128, 16, 16, 2, 2, m_stream_compute);
+        
+        // Layer 3
+        launchIm2colFP16(d_enc_pool2_out, d_im2col_fp16,
+                         m_batchSize, 128, 8, 8, 8, 8, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardFP16(d_weights_fp16 + w3_offset, d_im2col_fp16, d_dec_conv3_b,
+                                  d_dec_relu3_out,
+                                  m_batchSize, 128, 1152, 64,
+                                  m_cublas_handle, m_stream_compute, true);
+        launchUpsample2dNCHWStream(d_dec_relu3_out, d_dec_up1_out,
+                                   m_batchSize, 128, 8, 8, 2, m_stream_compute);
+        
+        // Layer 4
+        launchIm2colFP16(d_dec_up1_out, d_im2col_fp16,
+                         m_batchSize, 128, 16, 16, 16, 16, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardFP16(d_weights_fp16 + w4_offset, d_im2col_fp16, d_dec_conv4_b,
+                                  d_dec_relu4_out,
+                                  m_batchSize, 256, 1152, 256,
+                                  m_cublas_handle, m_stream_compute, true);
+        launchUpsample2dNCHWStream(d_dec_relu4_out, d_dec_up2_out,
+                                   m_batchSize, 256, 16, 16, 2, m_stream_compute);
+        
+        // Layer 5 (no ReLU)
+        launchIm2colFP16(d_dec_up2_out, d_im2col_fp16,
+                         m_batchSize, 256, 32, 32, 32, 32, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardFP16(d_weights_fp16 + w5_offset, d_im2col_fp16, d_dec_conv5_b,
+                                  d_output,
+                                  m_batchSize, 3, 2304, 1024,
+                                  m_cublas_handle, m_stream_compute, false);
+    } else {
+        // =====================================================
+        // FP32 Fallback Path (no Tensor Cores)
+        // =====================================================
+        
+        // Layer 1
+        launchIm2colNCHWStream(d_input, d_im2col_workspace,
+                               m_batchSize, 3, 32, 32, 32, 32, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardStream(d_enc_conv1_w, d_im2col_workspace, d_enc_conv1_b,
+                                    d_enc_relu1_out,
+                                    m_batchSize, 256, 27, 1024,
+                                    m_cublas_handle, m_stream_compute, true);
+        launchMaxPool2dNCHWStream(d_enc_relu1_out, d_enc_pool1_out, d_enc_pool1_indices,
+                                  m_batchSize, 256, 32, 32, 2, 2, m_stream_compute);
+        
+        // Layer 2
+        launchIm2colNCHWStream(d_enc_pool1_out, d_im2col_workspace,
+                               m_batchSize, 256, 16, 16, 16, 16, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardStream(d_enc_conv2_w, d_im2col_workspace, d_enc_conv2_b,
+                                    d_enc_relu2_out,
+                                    m_batchSize, 128, 2304, 256,
+                                    m_cublas_handle, m_stream_compute, true);
+        launchMaxPool2dNCHWStream(d_enc_relu2_out, d_enc_pool2_out, d_enc_pool2_indices,
+                                  m_batchSize, 128, 16, 16, 2, 2, m_stream_compute);
+        
+        // Layer 3
+        launchIm2colNCHWStream(d_enc_pool2_out, d_im2col_workspace,
+                               m_batchSize, 128, 8, 8, 8, 8, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardStream(d_dec_conv3_w, d_im2col_workspace, d_dec_conv3_b,
+                                    d_dec_relu3_out,
+                                    m_batchSize, 128, 1152, 64,
+                                    m_cublas_handle, m_stream_compute, true);
+        launchUpsample2dNCHWStream(d_dec_relu3_out, d_dec_up1_out,
+                                   m_batchSize, 128, 8, 8, 2, m_stream_compute);
+        
+        // Layer 4
+        launchIm2colNCHWStream(d_dec_up1_out, d_im2col_workspace,
+                               m_batchSize, 128, 16, 16, 16, 16, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardStream(d_dec_conv4_w, d_im2col_workspace, d_dec_conv4_b,
+                                    d_dec_relu4_out,
+                                    m_batchSize, 256, 1152, 256,
+                                    m_cublas_handle, m_stream_compute, true);
+        launchUpsample2dNCHWStream(d_dec_relu4_out, d_dec_up2_out,
+                                   m_batchSize, 256, 16, 16, 2, m_stream_compute);
+        
+        // Layer 5 (no ReLU)
+        launchIm2colNCHWStream(d_dec_up2_out, d_im2col_workspace,
+                               m_batchSize, 256, 32, 32, 32, 32, 3, 1, 1, m_stream_compute);
+        launchConvGemmForwardStream(d_dec_conv5_w, d_im2col_workspace, d_dec_conv5_b,
+                                    d_output,
+                                    m_batchSize, 3, 2304, 1024,
+                                    m_cublas_handle, m_stream_compute, false);
+    }
+}
+
 

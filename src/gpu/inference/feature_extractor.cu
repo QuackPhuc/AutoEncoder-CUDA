@@ -47,12 +47,9 @@ std::vector<float> FeatureExtractor::extract_all(
         int currentBatchSize = std::min(batchSize, numImages - b * batchSize);
         int batchStartIdx = b * batchSize;
         
-        // Create view into source data (pointer-based construction avoids deep copy overhead)
+        // Use pointer-based API directly (zero-copy from source data)
         const float* batchStart = images.data() + batchStartIdx * imgSize;
-        std::vector<float> batchImages(batchStart, batchStart + currentBatchSize * imgSize);
-        
-        // Extract features for this batch
-        std::vector<float> batchFeatures = m_encoder->extractBatchFeatures(batchImages, currentBatchSize);
+        std::vector<float> batchFeatures = m_encoder->extractBatchFeatures(batchStart, currentBatchSize);
         
         // Copy results to output buffer
         std::memcpy(allFeatures.data() + batchStartIdx * featureDim,

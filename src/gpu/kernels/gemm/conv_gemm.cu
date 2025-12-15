@@ -304,3 +304,133 @@ void launchConvGemmBackwardWeightsStream(
     }
 }
 
+// ============================================================
+// Mixed Precision (FP16 + Tensor Cores) Implementations
+// ============================================================
+
+#include <cuda_fp16.h>
+
+// Add bias kernel with FP32 output
+__global__ void addBiasFP32Kernel(
+    float* output,
+    const float* bias,
+    int batch, int outC, int outHW
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch * outC * outHW;
+    
+    if (idx >= total) return;
+    
+    int oc = (idx / outHW) % outC;
+    output[idx] += bias[oc];
+}
+
+// Add bias + ReLU kernel with FP32 output
+__global__ void addBiasReluFP32Kernel(
+    float* output,
+    const float* bias,
+    int batch, int outC, int outHW
+) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int total = batch * outC * outHW;
+    
+    if (idx >= total) return;
+    
+    int oc = (idx / outHW) % outC;
+    float val = output[idx] + bias[oc];
+    output[idx] = fmaxf(0.0f, val);
+}
+
+// FP16 GEMM forward with Tensor Cores
+void launchConvGemmForwardFP16(
+    const half* d_weights_fp16,
+    const half* d_im2col_fp16,
+    const float* d_bias,
+    float* d_output,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream,
+    bool applyRelu
+) {
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    
+    int M = outC;
+    int N = outHW;
+    int K = inC_k_k;
+    
+    long long int strideA = 0;  // Weights shared across batches
+    long long int strideB = (long long int)K * N;
+    long long int strideC = (long long int)M * N;
+    
+    // Use cublasGemmStridedBatchedEx for Tensor Core acceleration
+    // A (weights): [M, K] in FP16 - shared
+    // B (im2col):  [K, N] per batch in FP16
+    // C (output):  [M, N] per batch in FP32
+    CHECK_CUBLAS(cublasGemmStridedBatchedEx(handle,
+        CUBLAS_OP_N, CUBLAS_OP_N,
+        N, M, K,
+        &alpha,
+        d_im2col_fp16, CUDA_R_16F, N, strideB,
+        d_weights_fp16, CUDA_R_16F, K, strideA,
+        &beta,
+        d_output, CUDA_R_32F, N, strideC,
+        batch,
+        CUBLAS_COMPUTE_32F,
+        CUBLAS_GEMM_DEFAULT_TENSOR_OP
+    ));
+    
+    // Add bias (and optionally ReLU) - use FP32 kernels
+    int total = batch * outC * outHW;
+    int blockSize = 256;
+    int gridSize = (total + blockSize - 1) / blockSize;
+    
+    if (applyRelu) {
+        addBiasReluFP32Kernel<<<gridSize, blockSize, 0, stream>>>(
+            d_output, d_bias, batch, outC, outHW
+        );
+    } else {
+        addBiasFP32Kernel<<<gridSize, blockSize, 0, stream>>>(
+            d_output, d_bias, batch, outC, outHW
+        );
+    }
+    CHECK_CUDA(cudaGetLastError());
+}
+
+// FP16 GEMM backward w.r.t. input
+void launchConvGemmBackwardInputFP16(
+    const half* d_weights_fp16,
+    const half* d_gradOutput_fp16,
+    half* d_col_fp16,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream
+) {
+    (void)stream; // Stream already set on handle
+    
+    const float alpha = 1.0f;
+    const float beta = 0.0f;
+    
+    int M = inC_k_k;
+    int N = outHW;
+    int K = outC;
+    
+    long long int strideA = 0;  // Weights shared
+    long long int strideB = (long long int)K * N;
+    long long int strideC = (long long int)M * N;
+    
+    // d_col = W^T × gradOut
+    CHECK_CUBLAS(cublasGemmStridedBatchedEx(handle,
+        CUBLAS_OP_N, CUBLAS_OP_T,
+        N, M, K,
+        &alpha,
+        d_gradOutput_fp16, CUDA_R_16F, N, strideB,
+        d_weights_fp16, CUDA_R_16F, M, strideA,
+        &beta,
+        d_col_fp16, CUDA_R_16F, N, strideC,
+        batch,
+        CUBLAS_COMPUTE_32F,
+        CUBLAS_GEMM_DEFAULT_TENSOR_OP
+    ));
+}
+

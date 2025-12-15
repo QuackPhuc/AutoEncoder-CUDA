@@ -23,8 +23,11 @@ public:
     // Extract 8,192-dimensional features (single image)
     std::vector<float> getFeatures(const std::vector<float>& h_input);
     
-    // Extract features for batch of images
+    // Extract features for batch of images (vector interface)
     std::vector<float> extractBatchFeatures(const std::vector<float>& images, int numImages);
+    
+    // Extract features for batch of images (pointer interface - zero-copy from caller)
+    std::vector<float> extractBatchFeatures(const float* images, int numImages);
     
     // Get last computed loss
     float getLoss() const { return m_lastLoss; }
@@ -161,6 +164,34 @@ private:
     cudaStream_t m_stream_transfer; // Secondary stream for overlapped ops
     cublasHandle_t m_cublas_handle; // Per-instance cuBLAS handle with stream
     bool m_streams_initialized;     // Track stream initialization
+    
+    // ============================================================
+    // V3 Advanced Optimizations: FP16, CUDA Graphs, Pinned Memory
+    // ============================================================
+    
+    // Pinned memory for async H2D transfers
+    float* h_pinned_batch;          // Pinned host buffer for input batch
+    bool m_use_pinned_memory;
+    
+    // Mixed Precision (FP16) buffers for Tensor Cores
+    half* d_weights_fp16;           // All weights packed in FP16 [total_weight_count]
+    half* d_im2col_fp16;            // im2col workspace in FP16
+    bool m_use_tensor_cores;        // Whether device supports Tensor Cores
+    
+    // CUDA Graphs for reduced launch overhead
+    cudaGraph_t m_forward_graph;
+    cudaGraph_t m_backward_graph;
+    cudaGraphExec_t m_forward_graph_exec;
+    cudaGraphExec_t m_backward_graph_exec;
+    bool m_graphs_captured;
+    
+    // V3 internal forward/backward for graph capture
+    void forwardOptV3_kernels();
+    void backwardOptV3_kernels();
+    
+    // FP16 weight management
+    void convertWeightsToFP16();
+    void syncWeightsFromFP32();
 };
 
 #endif // GPU_MODEL_AUTOENCODER_H

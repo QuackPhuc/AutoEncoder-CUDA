@@ -114,4 +114,33 @@ void launchConvGemmBackwardWeightsStream(
     cudaStream_t stream
 );
 
+// ============================================================
+// Mixed Precision (FP16 + Tensor Cores) for GPU Opt V3
+// ============================================================
+
+#include <cuda_fp16.h>
+
+// FP16 GEMM forward with Tensor Cores (cublasGemmEx)
+// Input weights and im2col in FP16, output in FP32
+void launchConvGemmForwardFP16(
+    const half* d_weights_fp16,  // [outC, inC*k*k] in FP16
+    const half* d_im2col_fp16,   // [batch, inC*k*k, outH*outW] in FP16
+    const float* d_bias,         // [outC] in FP32
+    float* d_output,             // [batch, outC, outH*outW] in FP32
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream,
+    bool applyRelu = false
+);
+
+// FP16 GEMM backward w.r.t. input (for gradient computation)
+void launchConvGemmBackwardInputFP16(
+    const half* d_weights_fp16,
+    const half* d_gradOutput_fp16,
+    half* d_col_fp16,
+    int batch, int outC, int inC_k_k, int outHW,
+    cublasHandle_t handle,
+    cudaStream_t stream
+);
+
 #endif // GPU_GEMM_CONV_GEMM_H
