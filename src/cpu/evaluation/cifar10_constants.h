@@ -13,15 +13,6 @@ inline const std::vector<std::string> CIFAR10_CLASS_NAMES = {
     "dog", "frog", "horse", "ship", "truck"
 };
 
-// Number of classes in CIFAR-10
-constexpr int CIFAR10_NUM_CLASSES = 10;
-
-// Image dimensions
-constexpr int CIFAR10_IMAGE_WIDTH = 32;
-constexpr int CIFAR10_IMAGE_HEIGHT = 32;
-constexpr int CIFAR10_IMAGE_CHANNELS = 3;
-constexpr int CIFAR10_IMAGE_SIZE = CIFAR10_IMAGE_WIDTH * CIFAR10_IMAGE_HEIGHT * CIFAR10_IMAGE_CHANNELS;
-
 } // namespace evaluation
 
 #endif // CIFAR10_CONSTANTS_H

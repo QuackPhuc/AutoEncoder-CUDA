@@ -104,7 +104,7 @@ src/
 │   │       ├── conv2d.cu         # Conv2D forward
 │   │       ├── loss.cu           # MSE loss computation
 │   │       └── pooling.cu        # MaxPool/Upsample
-│   │   └── gemm/                 # im2col + cuBLAS (V4)
+│   │   └── gemm/                 # im2col + cuBLAS (V2)
 │   │       ├── im2col.cu         # im2col/col2im kernels
 │   │       ├── conv_gemm.cu      # cuBLAS SGEMM wrappers
 │   │       └── conv_gemm.h       # cuBLAS handle management
@@ -672,9 +672,9 @@ profiler.printMetrics(metrics, "GPU_OPT_V2");
 For detailed kernel-level profiling:
 
 ```bash
-# Using nvprof
+# Using nvprof (--gpu-version 3 = GPU_OPT_V2: im2col+GEMM)
 nvprof ./build/bin/autoencoder_gpu --gpu-version 3 --epochs 1
 
-# Using Nsight Compute
+# Using Nsight Compute (--gpu-version 3 = GPU_OPT_V2: im2col+GEMM)
 ncu --set full ./build/bin/autoencoder_gpu --gpu-version 3 --epochs 1
 ```

@@ -44,15 +44,13 @@ private:
     // Forward/backward pass implementations (in separate files)
     void forward();
     void forwardBasic();
-    void forwardOptV1();  // NCHW layout optimized (formerly V3)
-    void forwardOptV2();  // im2col + GEMM (formerly V4)
-    void forwardOptV3();  // im2col + GEMM + CUDA Streams
+    void forwardOptV1();  // NCHW layout optimized
+    void forwardOptV2();  // im2col + GEMM
     
     void backward();
     void backwardBasic();
-    void backwardOptV1();  // NCHW layout optimized (formerly V3)
-    void backwardOptV2();  // im2col + GEMM (formerly V4)
-    void backwardOptV3();  // im2col + GEMM + CUDA Streams
+    void backwardOptV1();  // NCHW layout optimized
+    void backwardOptV2();  // im2col + GEMM
     
     void updateWeights();
     
@@ -154,44 +152,10 @@ private:
     float* d_grad_enc_relu1;
     float* d_grad_enc_conv1;
     
-    // im2col workspace for V4 GEMM convolution
+    // im2col workspace for GEMM convolution
     // Size: batch * max(inC*k*k * outH*outW) for largest layer
     float* d_im2col_workspace;
     size_t m_im2col_workspace_size;
-    
-    // CUDA Streams for V3 overlapped execution
-    cudaStream_t m_stream_compute;  // Primary compute stream
-    cudaStream_t m_stream_transfer; // Secondary stream for overlapped ops
-    cublasHandle_t m_cublas_handle; // Per-instance cuBLAS handle with stream
-    bool m_streams_initialized;     // Track stream initialization
-    
-    // ============================================================
-    // V3 Advanced Optimizations: FP16, CUDA Graphs, Pinned Memory
-    // ============================================================
-    
-    // Pinned memory for async H2D transfers
-    float* h_pinned_batch;          // Pinned host buffer for input batch
-    bool m_use_pinned_memory;
-    
-    // Mixed Precision (FP16) buffers for Tensor Cores
-    half* d_weights_fp16;           // All weights packed in FP16 [total_weight_count]
-    half* d_im2col_fp16;            // im2col workspace in FP16
-    bool m_use_tensor_cores;        // Whether device supports Tensor Cores
-    
-    // CUDA Graphs for reduced launch overhead
-    cudaGraph_t m_forward_graph;
-    cudaGraph_t m_backward_graph;
-    cudaGraphExec_t m_forward_graph_exec;
-    cudaGraphExec_t m_backward_graph_exec;
-    bool m_graphs_captured;
-    
-    // V3 internal forward/backward for graph capture
-    void forwardOptV3_kernels();
-    void backwardOptV3_kernels();
-    
-    // FP16 weight management
-    void convertWeightsToFP16();
-    void syncWeightsFromFP32();
 };
 
 #endif // GPU_MODEL_AUTOENCODER_H

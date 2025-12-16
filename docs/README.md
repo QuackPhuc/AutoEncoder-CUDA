@@ -90,6 +90,4 @@ docs/
 
 ## Related Files
 
-- [QUICKSTART.md](../QUICKSTART.md) - Repository quick start guide
-- [FILE_MANIFEST.md](../FILE_MANIFEST.md) - Complete file listing
 - [README.md](../README.md) - Repository overview

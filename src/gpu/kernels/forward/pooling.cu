@@ -159,7 +159,7 @@ __global__ void upsample2dForwardNCHWKernel(
     output[out_idx] = input[in_idx];
 }
 
-// Host wrapper: NCHW MaxPool2D forward (GPU Opt V3)
+// Host wrapper: NCHW MaxPool2D forward (GPU Opt V1/V2)
 void launchMaxPool2dNCHW(
     const float* d_input, float* d_output, int* d_indices,
     int batch, int channels, int inH, int inW,
@@ -182,7 +182,7 @@ void launchMaxPool2dNCHW(
     CHECK_CUDA(cudaGetLastError());
 }
 
-// Host wrapper: NCHW Upsample2D forward (GPU Opt V3)
+// Host wrapper: NCHW Upsample2D forward (GPU Opt V1/V2)
 void launchUpsample2dNCHW(
     const float* d_input, float* d_output,
     int batch, int channels, int inH, int inW,
@@ -204,56 +204,3 @@ void launchUpsample2dNCHW(
     );
     CHECK_CUDA(cudaGetLastError());
 }
-
-// ============================================================
-// Stream-aware versions for GPU Opt V3
-// ============================================================
-
-// Stream-aware NCHW MaxPool2D forward
-void launchMaxPool2dNCHWStream(
-    const float* d_input, float* d_output, int* d_indices,
-    int batch, int channels, int inH, int inW,
-    int k, int stride,
-    cudaStream_t stream
-) {
-    int outH = (inH - k) / stride + 1;
-    int outW = (inW - k) / stride + 1;
-    
-    dim3 block(16, 16);
-    dim3 grid(
-        (outW + block.x - 1) / block.x,
-        (outH + block.y - 1) / block.y,
-        batch * channels
-    );
-    
-    maxpool2dForwardNCHWKernel<<<grid, block, 0, stream>>>(
-        d_input, d_output, d_indices,
-        batch, channels, inH, inW, outH, outW, k, stride
-    );
-    CHECK_CUDA(cudaGetLastError());
-}
-
-// Stream-aware NCHW Upsample2D forward
-void launchUpsample2dNCHWStream(
-    const float* d_input, float* d_output,
-    int batch, int channels, int inH, int inW,
-    int scale,
-    cudaStream_t stream
-) {
-    int outH = inH * scale;
-    int outW = inW * scale;
-    
-    dim3 block(16, 16);
-    dim3 grid(
-        (outW + block.x - 1) / block.x,
-        (outH + block.y - 1) / block.y,
-        batch * channels
-    );
-    
-    upsample2dForwardNCHWKernel<<<grid, block, 0, stream>>>(
-        d_input, d_output,
-        batch, channels, inH, inW, outH, outW, scale
-    );
-    CHECK_CUDA(cudaGetLastError());
-}
-

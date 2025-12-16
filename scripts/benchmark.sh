@@ -1,5 +1,5 @@
 #!/bin/bash
-# Benchmark all versions: CPU + GPU (naive, v1, v2, v3)
+# Benchmark all versions: CPU + GPU (naive, v1, v2)
 
 set -e
 
@@ -66,7 +66,6 @@ GPU_EXE="./build/bin/autoencoder_gpu"
 run_bench "GPU-Basic" "$GPU_EXE" "--gpu-version 1 --epochs $EPOCHS --samples $SAMPLES"
 run_bench "GPU-OptV1" "$GPU_EXE" "--gpu-version 2 --epochs $EPOCHS --samples $SAMPLES"
 run_bench "GPU-OptV2" "$GPU_EXE" "--gpu-version 3 --epochs $EPOCHS --samples $SAMPLES"
-run_bench "GPU-OptV3" "$GPU_EXE" "--gpu-version 4 --epochs $EPOCHS --samples $SAMPLES"
 
 echo ""
 
@@ -85,7 +84,6 @@ fi
 [[ -n "${GPU_Basic_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-Basic" $GPU_Basic_MS $(echo "scale=1; $BASE/$GPU_Basic_MS" | bc) "${GPU_Basic_MEM:-N/A}"
 [[ -n "${GPU_OptV1_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-OptV1" $GPU_OptV1_MS $(echo "scale=1; $BASE/$GPU_OptV1_MS" | bc) "${GPU_OptV1_MEM:-N/A}"
 [[ -n "${GPU_OptV2_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-OptV2" $GPU_OptV2_MS $(echo "scale=1; $BASE/$GPU_OptV2_MS" | bc) "${GPU_OptV2_MEM:-N/A}"
-[[ -n "${GPU_OptV3_MS:-}" ]] && printf "  %-12s %10d %12.1fx %10s\n" "GPU-OptV3" $GPU_OptV3_MS $(echo "scale=1; $BASE/$GPU_OptV3_MS" | bc) "${GPU_OptV3_MEM:-N/A}"
 
 echo ""
 echo "[OK] Saved: $RESULTS"

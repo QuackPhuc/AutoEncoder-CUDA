@@ -138,9 +138,9 @@ OPTIONS:
 
 | Version  | Description                          | Expected Speedup |
 |----------|--------------------------------------|------------------|
-| `naive`  | Basic GPU parallelization            | 166.7x           |
-| `v1`     | NCHW + 2D Grid + Warp Shuffle        | 237.0x           |
-| `v2`     | im2col + cuBLAS GEMM                 | 266.0x           |
+| `naive`  | Basic GPU parallelization            | 169x             |
+| `v1`     | NCHW + 2D Grid + Warp Shuffle        | 342x             |
+| `v2`     | im2col + cuBLAS GEMM                 | 1690x            |
 
 ### Example Commands
 

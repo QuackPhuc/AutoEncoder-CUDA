@@ -1,10 +1,8 @@
 #include "autoencoder.h"
 #include "gpu/core/cuda_utils.h"
-#include "gpu/core/mixed_precision.h"
 #include "config/gpu_config.h"
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
-#include <cuda_fp16.h>
 #include <cmath>
 #include <cstring>
 #include <fstream>
@@ -12,91 +10,14 @@
 #include <iostream>
 
 GPUAutoencoder::GPUAutoencoder(int batchSize, float learningRate)
-    : m_batchSize(batchSize), m_learningRate(learningRate), m_lastLoss(0.0f),
-      m_stream_compute(nullptr), m_stream_transfer(nullptr), 
-      m_cublas_handle(nullptr), m_streams_initialized(false),
-      h_pinned_batch(nullptr), m_use_pinned_memory(false),
-      d_weights_fp16(nullptr), d_im2col_fp16(nullptr), m_use_tensor_cores(false),
-      m_forward_graph(nullptr), m_backward_graph(nullptr),
-      m_forward_graph_exec(nullptr), m_backward_graph_exec(nullptr),
-      m_graphs_captured(false) {
+    : m_batchSize(batchSize), m_learningRate(learningRate), m_lastLoss(0.0f) {
     
     printGPUInfo();
     allocateMemory();
     initializeWeights();
-    
-    // Initialize CUDA streams for V3 mode
-    if (GPUConfig::getInstance().getVersion() == GPUVersion::GPU_OPT_V3) {
-        CHECK_CUDA(cudaStreamCreate(&m_stream_compute));
-        CHECK_CUDA(cudaStreamCreate(&m_stream_transfer));
-        
-        cublasStatus_t status = cublasCreate(&m_cublas_handle);
-        if (status != CUBLAS_STATUS_SUCCESS) {
-            std::cerr << "cuBLAS handle creation failed for V3" << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-        // Associate cuBLAS handle with compute stream
-        cublasSetStream(m_cublas_handle, m_stream_compute);
-        m_streams_initialized = true;
-        
-        // V3 Advanced: Pinned Memory
-        size_t batchBytes = m_batchSize * 32 * 32 * 3 * sizeof(float);
-        CHECK_CUDA(cudaMallocHost(&h_pinned_batch, batchBytes));
-        m_use_pinned_memory = true;
-        
-        // V3 Advanced: Tensor Core detection and FP16 setup
-        m_use_tensor_cores = deviceSupportsTensorCores();
-        if (m_use_tensor_cores) {
-            // Allocate FP16 buffers
-            // Total weights: enc_conv1(256*3*3*3) + enc_conv2(128*3*3*256) + 
-            //                dec_conv3(128*3*3*128) + dec_conv4(256*3*3*128) + dec_conv5(3*3*3*256)
-            size_t total_weights = 256*27 + 128*2304 + 128*1152 + 256*1152 + 3*2304;
-            CHECK_CUDA(cudaMalloc(&d_weights_fp16, total_weights * sizeof(half)));
-            
-            // FP16 im2col workspace (same size as FP32)
-            CHECK_CUDA(cudaMalloc(&d_im2col_fp16, m_im2col_workspace_size / sizeof(float) * sizeof(half)));
-            
-            // Convert initial weights to FP16
-            convertWeightsToFP16();
-            
-            std::cout << "V3 Optimization: Tensor Cores ENABLED (FP16 compute)" << std::endl;
-        } else {
-            std::cout << "V3 Optimization: Tensor Cores NOT available (using FP32)" << std::endl;
-        }
-        
-        std::cout << "V3 Optimization: Pinned Memory ENABLED" << std::endl;
-        std::cout << "V3 Optimization: CUDA Graphs ready for capture" << std::endl;
-    }
 }
 
 GPUAutoencoder::~GPUAutoencoder() {
-    // Clean up CUDA Graphs
-    if (m_graphs_captured) {
-        if (m_forward_graph_exec) cudaGraphExecDestroy(m_forward_graph_exec);
-        if (m_backward_graph_exec) cudaGraphExecDestroy(m_backward_graph_exec);
-        if (m_forward_graph) cudaGraphDestroy(m_forward_graph);
-        if (m_backward_graph) cudaGraphDestroy(m_backward_graph);
-    }
-    
-    // Clean up FP16 buffers
-    if (d_weights_fp16) cudaFree(d_weights_fp16);
-    if (d_im2col_fp16) cudaFree(d_im2col_fp16);
-    
-    // Clean up pinned memory
-    if (h_pinned_batch) cudaFreeHost(h_pinned_batch);
-    
-    // Clean up streams and cuBLAS handle
-    if (m_streams_initialized) {
-        if (m_cublas_handle) {
-            cublasDestroy(m_cublas_handle);
-        }
-        if (m_stream_compute) {
-            cudaStreamDestroy(m_stream_compute);
-        }
-        if (m_stream_transfer) {
-            cudaStreamDestroy(m_stream_transfer);
-        }
-    }
     freeMemory();
 }
 
@@ -300,25 +221,11 @@ void GPUAutoencoder::initializeWeights() {
 }
 
 void GPUAutoencoder::trainStep(const std::vector<float>& h_batch) {
-    size_t batchBytes = m_batchSize * 32 * 32 * 3 * sizeof(float);
+    CHECK_CUDA(cudaDeviceSynchronize());
     
-    if (m_use_pinned_memory) {
-        // V3 Advanced: Use pinned memory for async H2D transfer
-        std::memcpy(h_pinned_batch, h_batch.data(), batchBytes);
-        
-        // Async copy to GPU (overlaps with previous computation)
-        CHECK_CUDA(cudaMemcpyAsync(d_input, h_pinned_batch, batchBytes, 
-                                    cudaMemcpyHostToDevice, m_stream_transfer));
-        CHECK_CUDA(cudaMemcpyAsync(d_target, h_pinned_batch, batchBytes, 
-                                    cudaMemcpyHostToDevice, m_stream_transfer));
-        // Sync transfer stream before forward pass
-        CHECK_CUDA(cudaStreamSynchronize(m_stream_transfer));
-    } else {
-        // Standard sync transfer for V1/V2
-        CHECK_CUDA(cudaDeviceSynchronize());
-        CHECK_CUDA(cudaMemcpy(d_input, h_batch.data(), batchBytes, cudaMemcpyHostToDevice));
-        CHECK_CUDA(cudaMemcpy(d_target, h_batch.data(), batchBytes, cudaMemcpyHostToDevice));
-    }
+    size_t batchBytes = m_batchSize * 32 * 32 * 3 * sizeof(float);
+    CHECK_CUDA(cudaMemcpy(d_input, h_batch.data(), batchBytes, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_target, h_batch.data(), batchBytes, cudaMemcpyHostToDevice));
     
     forward();
     
@@ -329,11 +236,6 @@ void GPUAutoencoder::trainStep(const std::vector<float>& h_batch) {
     
     backward();
     updateWeights();
-    
-    // V3: Sync FP32 master weights to FP16 after update (if using Tensor Cores)
-    if (m_use_tensor_cores) {
-        syncWeightsFromFP32();
-    }
 }
 
 void GPUAutoencoder::forward() {
@@ -348,9 +250,6 @@ void GPUAutoencoder::forward() {
             break;
         case GPUVersion::GPU_OPT_V2:
             forwardOptV2();
-            break;
-        case GPUVersion::GPU_OPT_V3:
-            forwardOptV3();
             break;
         default:
             forwardBasic();
@@ -370,9 +269,6 @@ void GPUAutoencoder::backward() {
             break;
         case GPUVersion::GPU_OPT_V2:
             backwardOptV2();
-            break;
-        case GPUVersion::GPU_OPT_V3:
-            backwardOptV3();
             break;
         default:
             backwardBasic();
@@ -495,8 +391,7 @@ std::vector<float> GPUAutoencoder::extractBatchFeatures(const float* images, int
             break;
             
         case GPUVersion::GPU_OPT_V2:
-        case GPUVersion::GPU_OPT_V3:
-            // V2/V3: im2col + cuBLAS GEMM
+            // V2: im2col + cuBLAS GEMM
             // Layer 1: [batch,3,32,32] -> Conv+ReLU -> [batch,256,32,32] -> Pool -> [batch,256,16,16]
             launchIm2colNCHW(d_input, d_im2col_workspace,
                              numImages, 3, 32, 32, 32, 32, 3, 1, 1);
@@ -540,41 +435,3 @@ std::vector<float> GPUAutoencoder::extractBatchFeatures(const float* images, int
     return features;
 }
 
-// ============================================================
-// V3 Advanced: FP16 Weight Conversion for Tensor Cores
-// ============================================================
-
-void GPUAutoencoder::convertWeightsToFP16() {
-    if (!m_use_tensor_cores || !d_weights_fp16) return;
-    
-    // Convert all FP32 weights to FP16 for Tensor Core GEMM
-    // Layout: [enc_conv1_w, enc_conv2_w, dec_conv3_w, dec_conv4_w, dec_conv5_w]
-    
-    size_t offset = 0;
-    
-    // Encoder Conv1: 256 * 3 * 3 * 3 = 6912
-    launchFP32ToFP16(d_enc_conv1_w, d_weights_fp16 + offset, 256 * 27, m_stream_compute);
-    offset += 256 * 27;
-    
-    // Encoder Conv2: 128 * 3 * 3 * 256 = 294912
-    launchFP32ToFP16(d_enc_conv2_w, d_weights_fp16 + offset, 128 * 2304, m_stream_compute);
-    offset += 128 * 2304;
-    
-    // Decoder Conv3: 128 * 3 * 3 * 128 = 147456
-    launchFP32ToFP16(d_dec_conv3_w, d_weights_fp16 + offset, 128 * 1152, m_stream_compute);
-    offset += 128 * 1152;
-    
-    // Decoder Conv4: 256 * 3 * 3 * 128 = 294912
-    launchFP32ToFP16(d_dec_conv4_w, d_weights_fp16 + offset, 256 * 1152, m_stream_compute);
-    offset += 256 * 1152;
-    
-    // Decoder Conv5: 3 * 3 * 3 * 256 = 6912
-    launchFP32ToFP16(d_dec_conv5_w, d_weights_fp16 + offset, 3 * 2304, m_stream_compute);
-    
-    CHECK_CUDA(cudaStreamSynchronize(m_stream_compute));
-}
-
-void GPUAutoencoder::syncWeightsFromFP32() {
-    // After FP32 weight updates, sync back to FP16 for next forward pass
-    convertWeightsToFP16();
-}

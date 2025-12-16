@@ -691,10 +691,8 @@ Enumeration of GPU implementation versions.
 enum class GPUVersion {
     CPU_BASELINE = 0,  // CPU-only (for reference)
     GPU_BASIC = 1,     // Naive GPU parallelization
-    GPU_OPT_V1 = 2,    // Shared memory optimizations
-    GPU_OPT_V2 = 3,    // Kernel fusion
-    GPU_OPT_V3 = 4,    // NCHW + 2D grid + warp shuffle
-    GPU_OPT_V4 = 5     // im2col + cuBLAS GEMM
+    GPU_OPT_V1 = 2,    // NCHW + 2D grid + warp shuffle
+    GPU_OPT_V2 = 3     // im2col + cuBLAS GEMM
 };
 ```
 
@@ -812,7 +810,7 @@ void printMetrics(
 
 Kernels in `src/gpu/kernels/forward/` are primarily called directly via `extern` declarations for GPU_BASIC, or through NCHW host wrappers for GPU_OPT_V1+.
 
-**NCHW Kernels (GPU Opt V1/V2/V3):**
+**NCHW Kernels (GPU Opt V1/V2):**
 
 ```cpp
 // NCHW convolution with optional ReLU fusion
@@ -841,17 +839,13 @@ void launchUpsample2dNCHW(
     const float* d_input, float* d_output,
     int batch, int channels, int inH, int inW,
     int scale);
-
-// Stream-aware versions (GPU Opt V3)
-void launchMaxPool2dNCHWStream(/* same params */ cudaStream_t stream);
-void launchUpsample2dNCHWStream(/* same params */ cudaStream_t stream);
 ```
 
 ### Backward Pass Kernels
 
 Backward kernels are located in `src/gpu/kernels/backward/`. For GPU_BASIC, kernels are called directly via `extern` declarations. For GPU_OPT_V1+, NCHW host wrappers are used.
 
-**NCHW Wrappers (GPU Opt V1/V2/V3):**
+**NCHW Wrappers (GPU Opt V1/V2):**
 
 ```cpp
 // NCHW Conv2D gradients
@@ -885,10 +879,6 @@ void launchUpsample2dBackwardNCHW(
     const float* d_gradOutput, float* d_gradInput,
     int batch, int channels, int inH, int inW,
     int scale);
-
-// Stream-aware versions (GPU Opt V3)
-void launchMaxPool2dBackwardNCHWStream(/* same params */ cudaStream_t stream);
-void launchUpsample2dBackwardNCHWStream(/* same params */ cudaStream_t stream);
 ```
 
 ### CUDA Utilities
@@ -911,7 +901,7 @@ void launchUpsample2dBackwardNCHWStream(/* same params */ cudaStream_t stream);
 void printGPUInfo();
 ```
 
-### im2col + GEMM Kernels (V4)
+### im2col + GEMM Kernels (GPU Opt V2)
 
 Host wrapper functions for im2col + cuBLAS GEMM optimization:
 

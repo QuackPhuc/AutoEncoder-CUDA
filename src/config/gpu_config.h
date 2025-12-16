@@ -7,9 +7,8 @@
 enum class GPUVersion {
     CPU_BASELINE = 0, // CPU baseline
     GPU_BASIC = 1,    // GPU basic
-    GPU_OPT_V1 = 2,   // NCHW layout + 2D grid indexing (formerly V3)
-    GPU_OPT_V2 = 3,   // im2col + cuBLAS GEMM (formerly V4)
-    GPU_OPT_V3 = 4    // im2col + cuBLAS GEMM + CUDA Streams
+    GPU_OPT_V1 = 2,   // NCHW layout + 2D grid indexing + warp shuffle
+    GPU_OPT_V2 = 3    // im2col + cuBLAS GEMM
 };
 
 // Default configuration constants

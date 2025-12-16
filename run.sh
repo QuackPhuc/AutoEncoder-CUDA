@@ -25,7 +25,7 @@ COMMANDS:
 
 OPTIONS:
     --device cpu|gpu        Device to use (default: gpu)
-    --version v             GPU version: naive | v1 | v2 | v3 (default: v2)
+    --version v             GPU version: naive | v1 | v2 (default: v2)
     --epochs N              Training epochs (default: 20)
     --samples N             Limit samples, 0=all (default: 0)
     --batch-size N          Batch size, 0=auto (default: 0)
@@ -138,7 +138,6 @@ if [[ "$DEVICE" == "gpu" ]]; then
         naive) TRAIN_ARGS="$TRAIN_ARGS --gpu-version 1" ;;
         v1)    TRAIN_ARGS="$TRAIN_ARGS --gpu-version 2" ;;
         v2)    TRAIN_ARGS="$TRAIN_ARGS --gpu-version 3" ;;
-        v3)    TRAIN_ARGS="$TRAIN_ARGS --gpu-version 4" ;;
         *) echo "Invalid version: $VERSION"; exit 1 ;;
     esac
 fi
@@ -155,7 +154,6 @@ build_infer_args() {
         naive) INFER_ARGS="$INFER_ARGS --gpu-version 1" ;;
         v1)    INFER_ARGS="$INFER_ARGS --gpu-version 2" ;;
         v2)    INFER_ARGS="$INFER_ARGS --gpu-version 3" ;;
-        v3)    INFER_ARGS="$INFER_ARGS --gpu-version 4" ;;
     esac
 }
 
