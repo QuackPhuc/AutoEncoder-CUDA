@@ -63,9 +63,11 @@ int main(int argc, char* argv[]) {
         dataset.loadTestData();
         
         int batchSize = config.getBatchSize();
-        GPUAutoencoder model(batchSize, 0.001f);
         
         GPUProfiler profiler;
+        profiler.recordMemoryBaseline();  // Capture VRAM before model allocation
+        
+        GPUAutoencoder model(batchSize, 0.001f);
         auto metrics = profiler.profileTraining(model, dataset, epochs);
         
         profiler.printMetrics(metrics, config.getVersionName());

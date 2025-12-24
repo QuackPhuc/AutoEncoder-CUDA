@@ -253,6 +253,8 @@ __global__ void conv2dBackwardBiasNCHWKernel(
         if (blockDim.x >= 64) vsmem[tid] += vsmem[tid + 32];
         float myVal = vsmem[tid];
         
+        // Warp shuffle reduction: exchange values between threads without shared memory
+        // 0xffffffff = mask indicating all 32 warp threads participate
         for (int offset = 16; offset > 0; offset /= 2) {
             myVal += __shfl_down_sync(0xffffffff, myVal, offset);
         }

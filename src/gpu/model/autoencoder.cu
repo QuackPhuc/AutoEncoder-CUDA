@@ -97,12 +97,17 @@ void GPUAutoencoder::allocateMemory() {
     CHECK_CUDA(cudaMalloc(&d_grad_enc_pool1, m_batchSize * 16 * 16 * 256 * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_grad_enc_relu1, m_batchSize * 32 * 32 * 256 * sizeof(float)));
     CHECK_CUDA(cudaMalloc(&d_grad_enc_conv1, m_batchSize * 32 * 32 * 256 * sizeof(float)));
-    
-    // im2col workspace for V4 GEMM convolution
-    // Max size: batch * 256 * 3 * 3 * 16 * 16 = batch * 2304 * 256
-    // Largest layer: 256 channels * 9 kernel * 32*32 output = 2,359,296 per batch
-    m_im2col_workspace_size = static_cast<size_t>(m_batchSize) * 256 * 9 * 32 * 32 * sizeof(float);
-    CHECK_CUDA(cudaMalloc(&d_im2col_workspace, m_im2col_workspace_size));
+
+    // im2col workspace for GEMM convolution
+    // Max size: batch * 256 * 3 * 3 * 32 * 32 = ~576 MB for batch=64
+    GPUVersion currentVersion = GPUConfig::getInstance().getVersion();
+    if (currentVersion == GPUVersion::GPU_OPT_V2) {
+        m_im2col_workspace_size = static_cast<size_t>(m_batchSize) * 256 * 9 * 32 * 32 * sizeof(float);
+        CHECK_CUDA(cudaMalloc(&d_im2col_workspace, m_im2col_workspace_size));
+    } else {
+        d_im2col_workspace = nullptr;
+        m_im2col_workspace_size = 0;
+    }
 }
 
 void GPUAutoencoder::freeMemory() {

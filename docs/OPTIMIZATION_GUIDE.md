@@ -159,6 +159,18 @@ if (tid == 0) {
 }
 ```
 
+**Understanding `0xffffffff` (Warp Mask)**:
+
+The first parameter of `__shfl_down_sync` is a **32-bit thread mask** that specifies which threads participate in the shuffle:
+
+| Bit Pattern | Meaning |
+|-------------|---------|
+| `0xffffffff` | All 32 bits = 1 → All 32 threads in the warp participate |
+| `0x0000ffff` | Lower 16 bits = 1 → Only threads 0-15 participate |
+| `0x00000001` | Only bit 0 = 1 → Only thread 0 participates |
+
+Since a CUDA warp contains exactly 32 threads (indexed 0-31), `0xffffffff` (all 32 bits set to 1) indicates **full warp participation**. This is required for correctness: if some threads don't participate but are expected to contribute values, the result will be undefined.
+
 **Benefits**:
 
 - No shared memory required

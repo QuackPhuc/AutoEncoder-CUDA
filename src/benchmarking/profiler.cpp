@@ -89,6 +89,16 @@ void GPUProfiler::printMetrics(
     std::cout << "========================================\n";
 }
 
+void GPUProfiler::recordMemoryBaseline() {
+    size_t totalMem = 0;
+    cudaError_t err = cudaMemGetInfo(&m_freeMemBaseline, &totalMem);
+    if (err != cudaSuccess) {
+        std::cerr << "Warning: Could not query GPU memory baseline: "
+                  << cudaGetErrorString(err) << "\n";
+        m_freeMemBaseline = 0;
+    }
+}
+
 size_t GPUProfiler::getGPUMemoryUsage() const {
     size_t freeMem = 0;
     size_t totalMem = 0;
@@ -98,6 +108,11 @@ size_t GPUProfiler::getGPUMemoryUsage() const {
                   << cudaGetErrorString(err) << "\n";
         return 0;
     }
-    return totalMem - freeMem;
+    
+    // Return delta from baseline if available, otherwise return total used
+    if (m_freeMemBaseline > 0 && m_freeMemBaseline > freeMem) {
+        return m_freeMemBaseline - freeMem;  // Model-specific usage
+    }
+    return totalMem - freeMem;  // Fallback to total usage
 }
 

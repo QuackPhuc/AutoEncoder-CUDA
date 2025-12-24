@@ -28,6 +28,8 @@ public:
             , memoryBandwidthUtil(0.0f) {}
     };
 
+    void recordMemoryBaseline();
+    
     Metrics profileTraining(GPUAutoencoder& model,
                             CIFAR10Dataset& dataset,
                             int epochs);
@@ -36,6 +38,8 @@ public:
                       const std::string& versionName) const;
 
 private:
+    size_t m_freeMemBaseline = 0;  // Free memory before model allocation
+    
     size_t getGPUMemoryUsage() const;
 };
 
