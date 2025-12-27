@@ -4,6 +4,10 @@ High-Performance CUDA Convolutional Autoencoder for CIFAR-10 Feature Learning an
 
 [![Phase](https://img.shields.io/badge/Phase-4%20Complete-success)](.) [![CUDA](https://img.shields.io/badge/CUDA-11.0%2B-green)](https://developer.nvidia.com/cuda-toolkit) [![CMake](https://img.shields.io/badge/CMake-3.18%2B-blue)](https://cmake.org/)
 
+## Presentation Video
+
+[Group 18](https://www.youtube.com/watch?v=a0Tpch7mYKc)
+
 ## Overview
 
 A complete two-stage machine learning pipeline:
